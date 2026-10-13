@@ -1,0 +1,27 @@
+# ==== 编译产物 ====
+backend/target/
+backend/*.class
+backend/*.jar
+backend/*.log
+
+# ==== IDE ====
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# ==== 前端 ====
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# ==== 系统 ====
+.DS_Store
+Thumbs.db
+
+# ==== 上传文件（运行时生成）====
+uploads/
+
+# ==== 旧项目副本（外面 D:\VSCodeFiles\MaruBlog 还有原始的）====
+MaruBlog/
