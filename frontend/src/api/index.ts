@@ -74,4 +74,15 @@ export const levelsApi = {
   },
 }
 
+export const uploadApi = {
+  upload: async (file: File) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await api.post<{ url: string; name: string; size: number; mime: string }>('/upload', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return res.data
+  },
+}
+
 export { extractError }

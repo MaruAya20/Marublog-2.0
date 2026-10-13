@@ -8,6 +8,7 @@ export interface User {
   avatar?: string
   signature?: string
   xp?: number
+  level?: number
   createdAt?: string
 }
 

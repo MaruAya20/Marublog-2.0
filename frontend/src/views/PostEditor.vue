@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { postApi, tagApi, extractError } from '@/api'
+import { postApi, tagApi, uploadApi, extractError } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
@@ -10,6 +10,13 @@ const auth = useAuthStore()
 
 const slug = computed(() => route.params.slug as string | undefined)
 const isEdit = computed(() => !!slug.value)
+
+const MAX_IMAGES = 3
+const MAX_AUDIOS = 2
+const MAX_SIZE = 10 * 1024 * 1024
+
+interface ImageItem { url: string; name: string; snippet: string }
+interface AudioItem { url: string; name: string; snippet: string }
 
 const loading = ref(false)
 const title = ref('')
@@ -21,9 +28,13 @@ const scheduledAt = ref('')
 const presetTags = ref<string[]>([])
 const submitting = ref(false)
 const error = ref('')
+const editorRef = ref<HTMLTextAreaElement | null>(null)
+
+const images = ref<ImageItem[]>([])
+const audios = ref<AudioItem[]>([])
 
 const parsedTags = computed(() =>
-  tagsInput.value.split(',').map(s => s.trim()).filter(Boolean)
+  tagsInput.value.split(' ').map(s => s.trim()).filter(Boolean)
 )
 
 onMounted(async () => {
@@ -36,7 +47,6 @@ onMounted(async () => {
     const tagRes = await tagApi.list()
     presetTags.value = Array.isArray(tagRes) ? tagRes.map((t: any) => t.name || t).filter(Boolean) : []
   } catch {}
-
   if (isEdit.value && slug.value) {
     loading.value = true
     try {
@@ -44,7 +54,7 @@ onMounted(async () => {
       title.value = post.title
       content.value = post.content || ''
       excerpt.value = post.excerpt || ''
-      tagsInput.value = (post.tags || []).join(', ')
+      tagsInput.value = (post.tags || []).join(' ')
       status.value = (post.status as any) === 'draft' ? 'draft' : 'published'
     } catch (err) {
       error.value = extractError(err)
@@ -54,16 +64,82 @@ onMounted(async () => {
   }
 })
 
+function insert(before: string, after = '') {
+  const el = editorRef.value
+  if (!el) return
+  const start = el.selectionStart ?? content.value.length
+  const end = el.selectionEnd ?? content.value.length
+  const selected = content.value.slice(start, end)
+  content.value =
+    content.value.slice(0, start) + before + selected + after + content.value.slice(end)
+  setTimeout(() => {
+    el.focus()
+    el.selectionStart = start + before.length
+    el.selectionEnd = start + before.length + selected.length
+  }, 0)
+}
+
 function insertTag(tag: string) {
   const current = parsedTags.value
   if (current.includes(tag)) return
-  tagsInput.value = current.length ? current.join(', ') + ', ' + tag : tag
+  tagsInput.value = current.length ? current.join(' ') + ' ' + tag : tag
+}
+
+async function handleImageFiles(files: FileList | null) {
+  if (!files || !files.length) return
+  const remaining = MAX_IMAGES - images.value.length
+  if (remaining <= 0) {
+    alert(`最多只能上传 ${MAX_IMAGES} 张图片`)
+    return
+  }
+  const toUpload = Array.from(files).slice(0, remaining)
+  for (const file of toUpload) {
+    if (!file.type.startsWith('image/')) { alert('只能上传图片'); continue }
+    if (file.size > MAX_SIZE) { alert(`${file.name} 超过 10MB`); continue }
+    try {
+      const res = await uploadApi.upload(file)
+      const safeName = res.name.replace(/\.[^.]+$/, '')
+      const snippet = `\n![${safeName}](${res.url})\n`
+      content.value += snippet
+      images.value.push({ url: res.url, name: res.name, snippet })
+    } catch (err) {
+      alert(`上传失败: ${extractError(err)}`)
+    }
+  }
+}
+
+async function handleAudioFile(file: File | null) {
+  if (!file) return
+  if (audios.value.length >= MAX_AUDIOS) {
+    alert(`最多只能上传 ${MAX_AUDIOS} 个音频`)
+    return
+  }
+  if (!file.type.startsWith('audio/')) { alert('只能上传音频'); return }
+  if (file.size > MAX_SIZE) { alert('文件超过 10MB'); return }
+  try {
+    const res = await uploadApi.upload(file)
+    const safeName = res.name.replace(/\.[^.]+$/, '')
+    const snippet = `\n[audio:${safeName}](${res.url})\n`
+    content.value += snippet
+    audios.value.push({ url: res.url, name: res.name, snippet })
+  } catch (err) {
+    alert(`上传失败: ${extractError(err)}`)
+  }
+}
+
+function removeImage(item: ImageItem) {
+  images.value = images.value.filter(x => x.url !== item.url)
+  content.value = content.value.replace(item.snippet, '')
+}
+
+function removeAudio(item: AudioItem) {
+  audios.value = audios.value.filter(x => x.url !== item.url)
+  content.value = content.value.replace(item.snippet, '')
 }
 
 async function handleSubmit(asDraft = false) {
   if (!title.value.trim()) { alert('标题不能为空'); return }
   if (!content.value.trim()) { alert('内容不能为空'); return }
-
   submitting.value = true
   error.value = ''
   try {
@@ -77,7 +153,6 @@ async function handleSubmit(asDraft = false) {
     if (scheduledAt.value) {
       payload.scheduledAt = new Date(scheduledAt.value).toISOString()
     }
-
     let result
     if (isEdit.value && slug.value) {
       result = await postApi.update(slug.value, payload)
@@ -107,7 +182,6 @@ async function handleDelete() {
 <template>
   <div>
     <h1 style="margin-bottom: 20px;">{{ isEdit ? '编辑文章' : '写新文章' }}</h1>
-
     <div v-if="loading" class="loading">加载中...</div>
     <div v-else class="card">
       <div v-if="error" class="error" style="margin-bottom: 16px;">{{ error }}</div>
@@ -118,8 +192,8 @@ async function handleDelete() {
       </div>
 
       <div class="form-row">
-        <label>标签（逗号分隔）</label>
-        <input v-model="tagsInput" placeholder="如: Vue, Spring Boot, 技术" />
+        <label>标签（空格分隔）</label>
+        <input v-model="tagsInput" placeholder="例如 Vue Spring Boot 技术" />
         <div v-if="presetTags.length" style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px;">
           <button
             v-for="t in presetTags"
@@ -142,12 +216,59 @@ async function handleDelete() {
 
       <div class="form-row">
         <label>正文 (Markdown) *</label>
+        <div class="toolbar">
+          <button type="button" @click="insert('**', '**')">加粗</button>
+          <button type="button" @click="insert('*', '*')">斜体</button>
+          <button type="button" @click="insert('`', '`')">行内代码</button>
+          <button type="button" @click="insert('\n```\n', '\n```\n')">代码块</button>
+          <button type="button" @click="insert('# ')">标题</button>
+          <button type="button" @click="insert('- ')">列表</button>
+          <button type="button" @click="insert('[文本](链接)')">链接</button>
+          <button type="button" @click="insert('![alt](https://example.com/image.jpg)')">图片占位</button>
+        </div>
         <textarea
+          ref="editorRef"
           v-model="content"
-          placeholder="支持 Markdown 格式..."
+          placeholder="支持 Markdown 格式...&#10;&#10;图片自动插入: ![name](/api/uploads/xxx.png)&#10;音频自动插入: [audio:name](/api/uploads/xxx.mp3)"
           rows="18"
           style="font-family: monospace;"
         ></textarea>
+      </div>
+
+      <div class="form-row">
+        <label>图片上传（最多 {{ MAX_IMAGES }} 张，单张最大 10MB）</label>
+        <input
+          type="file"
+          accept="image/*"
+          multiple
+          :disabled="images.length >= MAX_IMAGES"
+          @change="(e) => handleImageFiles((e.target as HTMLInputElement).files)"
+        />
+        <div v-if="images.length" class="hint">已添加图片：{{ images.length }}/{{ MAX_IMAGES }}</div>
+        <div v-if="images.length" style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;">
+          <div v-for="img in images" :key="img.url" class="thumb-item">
+            <img :src="img.url" class="thumb" :alt="img.name" />
+            <button type="button" class="thumb-close" @click="removeImage(img)">×</button>
+            <div class="thumb-name">{{ img.name }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label>音频上传（最多 {{ MAX_AUDIOS }} 个，单个最大 10MB）</label>
+        <input
+          type="file"
+          accept="audio/*"
+          :disabled="audios.length >= MAX_AUDIOS"
+          @change="(e) => handleAudioFile(((e.target as HTMLInputElement).files || null)?.[0] || null)"
+        />
+        <div v-if="audios.length" class="hint">已添加音频：{{ audios.length }}/{{ MAX_AUDIOS }}</div>
+        <div v-if="audios.length" style="margin-top: 8px;">
+          <span v-for="a in audios" :key="a.url" style="display: inline-flex; align-items: center; margin-right: 12px; padding: 4px 10px; background: #f5f5f5; border-radius: 6px;">
+            🎵 {{ a.name }}
+            <button type="button" class="thumb-close" style="position: static; margin-left: 6px;" @click="removeAudio(a)">×</button>
+          </span>
+        </div>
       </div>
 
       <div class="form-row">
@@ -174,4 +295,60 @@ async function handleDelete() {
 <style scoped>
 .danger { color: #e74c3c; border-color: #e74c3c; }
 .tag.active { background: var(--primary, #4a9eff); color: #fff; }
+.toolbar {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+  padding: 6px;
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+}
+.toolbar button {
+  padding: 4px 10px;
+  border: 1px solid #ddd;
+  background: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.15s;
+}
+.toolbar button:hover { background: var(--primary, #4a9eff); color: #fff; border-color: var(--primary, #4a9eff); }
+.hint { font-size: 12px; color: #888; margin-top: 4px; }
+.thumb-item {
+  position: relative;
+  width: 90px;
+  text-align: center;
+}
+.thumb {
+  width: 90px;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #eee;
+}
+.thumb-close {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: #e74c3c;
+  color: #fff;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
+}
+.thumb-name {
+  font-size: 11px;
+  color: #666;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 </style>
