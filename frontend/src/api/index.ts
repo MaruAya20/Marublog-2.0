@@ -1,5 +1,5 @@
 import { api, extractError } from './client'
-import type { Post, Comment, TagDef, SiteSettings, PostListResponse } from '@/types'
+import type { Post, Comment, TagDef, SiteSettings, PostListResponse, UserPreference } from '@/types'
 
 export const postApi = {
   list: async (params?: { tag?: string; page?: number; pageSize?: number; q?: string }) => {
@@ -30,6 +30,10 @@ export const postApi = {
     const res = await api.post(`/posts/${slug}/favorite`)
     return res.data
   },
+  drafts: async () => {
+    const res = await api.get<Post[]>('/posts/drafts')
+    return res.data
+  }
 }
 
 export const commentApi = {
@@ -37,7 +41,11 @@ export const commentApi = {
     const res = await api.get<Comment[]>('/comments', { params: { postId } })
     return res.data
   },
-  create: async (data: { postId: number; content: string; guestName?: string }) => {
+  tree: async (postId: number) => {
+    const res = await api.get<any>('/comments/tree', { params: { postId } })
+    return res.data
+  },
+  create: async (data: { postId: number; content: string; guestName?: string; parentId?: number; mentionUserId?: number }) => {
     const res = await api.post<Comment>('/comments', data)
     return res.data
   },
@@ -62,9 +70,9 @@ export const siteApi = {
 }
 
 export const trackApi = {
-  view: async (data: { route: string; slug?: string; postId?: number }) => {
+  view: async (data: { route: string; slug?: string; postId?: number; tag?: string }) => {
     await api.post('/track/view', data).catch(() => {})
-  },
+  }
 }
 
 export const levelsApi = {
@@ -78,9 +86,37 @@ export const uploadApi = {
   upload: async (file: File) => {
     const fd = new FormData()
     fd.append('file', file)
-    const res = await api.post<{ url: string; name: string; size: number; mime: string }>('/upload', fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
+    const res = await api.post<{ url: string; name: string; size: number; mime: string }>('/upload', fd)
+    return res.data
+  },
+}
+
+export const notificationApi = {
+  async list(type?: string) {
+    const res = await api.get<any>('/notifications', { params: type ? { type } : undefined })
+    return res.data
+  },
+  async unread() {
+    const res = await api.get<{ count: number }>('/notifications/unread')
+    return res.data
+  },
+  async markRead(id: number) {
+    const res = await api.post(`/notifications/${id}/read`)
+    return res.data
+  },
+  async markAllRead() {
+    const res = await api.post('/notifications/read-all')
+    return res.data
+  },
+}
+
+export const preferenceApi = {
+  get: async () => {
+    const res = await api.get<UserPreference>('/me/preference')
+    return res.data
+  },
+  update: async (data: Partial<Omit<UserPreference, 'opacity'>> & { opacity?: number }) => {
+    const res = await api.patch('/me/preference', data)
     return res.data
   },
 }

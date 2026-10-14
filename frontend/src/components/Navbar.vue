@@ -28,7 +28,12 @@ function handleLogout() {
 
 function goProfile() {
   menuOpen.value = false
-  router.push('/me')
+  const name = auth.user?.name
+  if (name) {
+    router.push(`/user/${encodeURIComponent(name)}`)
+  } else {
+    router.push('/')
+  }
 }
 </script>
 
@@ -41,10 +46,15 @@ function goProfile() {
       </router-link>
 
       <nav class="nav-links">
-        <router-link to="/" class="nav-link" active-class="active">首页</router-link>
+        <router-link to="/" class="nav-link" active-class="active">发现</router-link>
+        <router-link v-if="auth.isLoggedIn && auth.user?.name"
+                     :to="`/user/${encodeURIComponent(auth.user.name)}`"
+                     class="nav-link" active-class="active">首页</router-link>
+        <router-link v-else to="/login" class="nav-link">首页</router-link>
         <router-link to="/tags" class="nav-link" active-class="active">标签</router-link>
-        <router-link to="/levels" class="nav-link" active-class="active">等级</router-link>
         <router-link v-if="auth.isLoggedIn" to="/new" class="nav-link write-btn">✍️ 发文</router-link>
+        <router-link v-if="auth.isLoggedIn" to="/messages" class="nav-link" active-class="active">📬 信箱</router-link>
+        <router-link v-if="auth.isLoggedIn" to="/drafts" class="nav-link" active-class="active">📝 草稿</router-link>
 
         <template v-if="auth.isLoggedIn">
           <div class="avatar-wrapper" @click.stop="menuOpen = !menuOpen">
@@ -58,6 +68,12 @@ function goProfile() {
             <div v-if="menuOpen" class="avatar-menu" role="menu">
               <button class="menu-item" @click="goProfile">
                 👤 个人主页
+              </button>
+              <button class="menu-item" @click="menuOpen = false; router.push('/settings')">
+                ⚙️ 设置
+              </button>
+              <button class="menu-item" @click="menuOpen = false; router.push('/levels')">
+                🏆 等级体系
               </button>
               <button class="menu-item danger" @click="handleLogout">
                 🚪 退出登录

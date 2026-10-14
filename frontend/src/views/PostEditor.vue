@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { postApi, tagApi, uploadApi, extractError } from '@/api'
 import { useAuthStore } from '@/stores/auth'
@@ -13,7 +13,9 @@ const isEdit = computed(() => !!slug.value)
 
 const MAX_IMAGES = 3
 const MAX_AUDIOS = 2
-const MAX_SIZE = 10 * 1024 * 1024
+const MAX_SIZE = 50 * 1024 * 1024
+const AUTOSAVE_INTERVAL = 30000
+const DRAFT_LOCAL_KEY = 'marublog_autosave_draft_slug'
 
 interface ImageItem { url: string; name: string; snippet: string }
 interface AudioItem { url: string; name: string; snippet: string }
@@ -33,9 +35,85 @@ const editorRef = ref<HTMLTextAreaElement | null>(null)
 const images = ref<ImageItem[]>([])
 const audios = ref<AudioItem[]>([])
 
-const parsedTags = computed(() =>
-  tagsInput.value.split(' ').map(s => s.trim()).filter(Boolean)
-)
+const autosaveTimer = ref<number | null>(null)
+const debounceTimer = ref<number | null>(null)
+const lastSavedSnapshot = ref('')
+const draftSlug = ref<string | null>(null)
+const autosaveStatus = ref('')
+
+function buildSnapshot() {
+  return JSON.stringify({ t: title.value, c: content.value, e: excerpt.value, tags: tagsInput.value })
+}
+
+async function autosave() {
+  if (!auth.isLoggedIn) return
+  const snap = buildSnapshot()
+  if (snap === lastSavedSnapshot.value) return
+  if (!title.value.trim() && !content.value.trim()) return
+
+  try {
+    const payload: any = {
+      title: title.value.trim() || '(未命名草稿)',
+      content: content.value,
+      excerpt: excerpt.value.trim() || undefined,
+      tags: parsedTags.value,
+      status: 'draft',
+    }
+    let result
+    if (isEdit.value && slug.value) {
+      result = await postApi.update(slug.value, payload)
+    } else if (draftSlug.value) {
+      result = await postApi.update(draftSlug.value, payload)
+    } else {
+      result = await postApi.create(payload)
+      draftSlug.value = result.slug
+      localStorage.setItem(DRAFT_LOCAL_KEY, result.slug)
+    }
+    lastSavedSnapshot.value = snap
+    autosaveStatus.value = `自动保存于 ${new Date().toLocaleTimeString()}`
+  } catch (err) {
+    autosaveStatus.value = '自动保存失败'
+  }
+}
+
+function triggerDebouncedAutosave() {
+  if (debounceTimer.value) clearTimeout(debounceTimer.value)
+  debounceTimer.value = window.setTimeout(() => {
+    autosave()
+  }, 3000)
+}
+
+function parseMdMedia(md: string) {
+  const imgs: ImageItem[] = []
+  const auds: AudioItem[] = []
+  if (!md) return { imgs, auds }
+  const imgRegex = /!\[([^\]]*)\]\(([^)]+)\)/g
+  let m: RegExpExecArray | null
+  while ((m = imgRegex.exec(md))) {
+    const name = m[1] || m[2].split('/').pop() || 'image'
+    imgs.push({ url: m[2], name, snippet: m[0] })
+  }
+  const audRegex = /\[audio:([^\]]*)\]\(([^)]+)\)/g
+  while ((m = audRegex.exec(md))) {
+    const name = m[1] || m[2].split('/').pop() || 'audio'
+    auds.push({ url: m[2], name, snippet: m[0] })
+  }
+  return { imgs, auds }
+}
+
+function clearAll() {
+  if (!confirm('确定要清空所有内容吗？（不会删除已上传的文件）')) return
+  title.value = ''
+  content.value = ''
+  excerpt.value = ''
+  tagsInput.value = ''
+  images.value = []
+  audios.value = []
+  autosaveStatus.value = ''
+  lastSavedSnapshot.value = ''
+  draftSlug.value = null
+  localStorage.removeItem(DRAFT_LOCAL_KEY)
+}
 
 onMounted(async () => {
   if (!auth.isLoggedIn) {
@@ -47,6 +125,7 @@ onMounted(async () => {
     const tagRes = await tagApi.list()
     presetTags.value = Array.isArray(tagRes) ? tagRes.map((t: any) => t.name || t).filter(Boolean) : []
   } catch {}
+
   if (isEdit.value && slug.value) {
     loading.value = true
     try {
@@ -56,13 +135,72 @@ onMounted(async () => {
       excerpt.value = post.excerpt || ''
       tagsInput.value = (post.tags || []).join(' ')
       status.value = (post.status as any) === 'draft' ? 'draft' : 'published'
+      const { imgs, auds } = parseMdMedia(content.value)
+      images.value = imgs.slice(0, MAX_IMAGES)
+      audios.value = auds.slice(0, MAX_AUDIOS)
+      lastSavedSnapshot.value = buildSnapshot()
     } catch (err) {
       error.value = extractError(err)
     } finally {
       loading.value = false
     }
+  } else {
+    const savedSlug = localStorage.getItem(DRAFT_LOCAL_KEY)
+    if (savedSlug) {
+      try {
+        const post = await postApi.getBySlug(savedSlug)
+        if (post.status === 'draft' && post.authorId === auth.user?.id) {
+          draftSlug.value = savedSlug
+          title.value = post.title === '(未命名草稿)' ? '' : post.title
+          content.value = post.content || ''
+          excerpt.value = post.excerpt || ''
+          tagsInput.value = (post.tags || []).join(' ')
+          status.value = 'draft'
+          const { imgs, auds } = parseMdMedia(content.value)
+          images.value = imgs.slice(0, MAX_IMAGES)
+          audios.value = auds.slice(0, MAX_AUDIOS)
+          lastSavedSnapshot.value = buildSnapshot()
+          autosaveStatus.value = '已恢复上次的草稿'
+        }
+      } catch {}
+    }
+  }
+
+  autosaveTimer.value = window.setInterval(autosave, AUTOSAVE_INTERVAL)
+
+  window.addEventListener('beforeunload', handleBeforeUnload)
+})
+
+function handleBeforeUnload() {
+  if (lastSavedSnapshot.value !== buildSnapshot() && (title.value.trim() || content.value.trim())) {
+    autosave()
+    return '有未保存的内容，确定要离开吗？'
+  }
+  return undefined
+}
+
+onUnmounted(() => {
+  if (autosaveTimer.value) {
+    clearInterval(autosaveTimer.value)
+    autosaveTimer.value = null
+  }
+  if (debounceTimer.value) {
+    clearTimeout(debounceTimer.value)
+    debounceTimer.value = null
+  }
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+})
+
+watch([title, content, excerpt, tagsInput], () => {
+  if (lastSavedSnapshot.value !== buildSnapshot()) {
+    autosaveStatus.value = '有未保存的更改...'
+    triggerDebouncedAutosave()
   }
 })
+
+const parsedTags = computed(() =>
+  tagsInput.value.split(' ').map(s => s.trim()).filter(Boolean)
+)
 
 function insert(before: string, after = '') {
   const el = editorRef.value
@@ -138,13 +276,13 @@ function removeAudio(item: AudioItem) {
 }
 
 async function handleSubmit(asDraft = false) {
-  if (!title.value.trim()) { alert('标题不能为空'); return }
-  if (!content.value.trim()) { alert('内容不能为空'); return }
+  if (!asDraft && !title.value.trim()) { alert('标题不能为空'); return }
+  if (!asDraft && !content.value.trim()) { alert('内容不能为空'); return }
   submitting.value = true
   error.value = ''
   try {
     const payload: any = {
-      title: title.value.trim(),
+      title: title.value.trim() || '(未命名草稿)',
       content: content.value,
       excerpt: excerpt.value.trim() || undefined,
       tags: parsedTags.value,
@@ -156,10 +294,23 @@ async function handleSubmit(asDraft = false) {
     let result
     if (isEdit.value && slug.value) {
       result = await postApi.update(slug.value, payload)
+    } else if (draftSlug.value) {
+      result = await postApi.update(draftSlug.value, payload)
     } else {
       result = await postApi.create(payload)
     }
-    router.push(`/post/${result.slug}`)
+    localStorage.removeItem(DRAFT_LOCAL_KEY)
+    if (!asDraft) {
+      draftSlug.value = null
+      lastSavedSnapshot.value = ''
+      autosaveStatus.value = ''
+      router.push(`/post/${result.slug}`)
+    } else {
+      draftSlug.value = result.slug
+      localStorage.setItem(DRAFT_LOCAL_KEY, result.slug)
+      lastSavedSnapshot.value = buildSnapshot()
+      autosaveStatus.value = `已保存为草稿 ${new Date().toLocaleTimeString()}`
+    }
   } catch (err) {
     error.value = extractError(err)
   } finally {
@@ -276,12 +427,19 @@ async function handleDelete() {
         <input type="datetime-local" v-model="scheduledAt" />
       </div>
 
+      <div v-if="autosaveStatus" class="autosave-hint" :class="{ dirty: autosaveStatus.includes('未保存') }">
+        💾 {{ autosaveStatus }}
+      </div>
+
       <div class="form-actions" style="display: flex; gap: 10px; flex-wrap: wrap;">
         <button class="btn-primary" :disabled="submitting" @click="handleSubmit(false)">
           {{ submitting ? '发布中...' : (isEdit ? '保存修改' : '发布') }}
         </button>
         <button class="btn-ghost" :disabled="submitting" @click="handleSubmit(true)">
           存为草稿
+        </button>
+        <button class="btn-ghost" :disabled="submitting" @click="clearAll">
+          清空文章
         </button>
         <button v-if="isEdit" class="btn-ghost danger" :disabled="submitting" @click="handleDelete">
           删除文章
@@ -293,6 +451,20 @@ async function handleDelete() {
 </template>
 
 <style scoped>
+.autosave-hint {
+  font-size: 12px;
+  color: #27ae60;
+  background: #eafaf1;
+  padding: 6px 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  border: 1px solid #b8e0cc;
+}
+.autosave-hint.dirty {
+  color: #e67e22;
+  background: #fef5e7;
+  border-color: #f3c48a;
+}
 .danger { color: #e74c3c; border-color: #e74c3c; }
 .tag.active { background: var(--primary, #4a9eff); color: #fff; }
 .toolbar {

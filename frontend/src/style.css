@@ -152,3 +152,20 @@ textarea { min-height: 100px; resize: vertical; }
   display: inline-block; padding: 2px 8px; border-radius: 4px;
   font-size: 12px; font-weight: 600; color: #fff;
 }
+
+.app {
+  position: relative;
+}
+
+.app::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image: var(--wallpaper-url, none);
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  opacity: var(--wallpaper-opacity, 0);
+  pointer-events: none;
+}

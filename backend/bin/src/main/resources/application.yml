@@ -1,0 +1,70 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /
+  tomcat:
+    max-http-form-post-size: 50MB
+    max-swallow-size: -1
+
+spring:
+  application:
+    name: marublog-backend
+
+  mail:
+    host: ${SMTP_HOST:smtp.qq.com}
+    port: ${SMTP_PORT:465}
+    username: ${SMTP_USER:2947119343@qq.com}
+    password: ${SMTP_PASS:igvostrzzypddhdj}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 10000
+          timeout: 10000
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/marublog?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci
+    username: root
+    password: z123qweasd
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc.time_zone: Asia/Shanghai
+    open-in-view: false
+
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+marublog:
+  jwt:
+    secret: ${JWT_SECRET:dev-secret-change-me-in-production-please-1234567890}
+    expiration-ms: 604800000
+  smtp:
+    host: ${SMTP_HOST:smtp.qq.com}
+    port: ${SMTP_PORT:465}
+    user: ${SMTP_USER:2947119343@qq.com}
+    pass: ${SMTP_PASS:igvostrzzypddhdj}
+    from: ${SMTP_FROM:MaruBlog <2947119343@qq.com>}
+  admin:
+    op-code: ${ADMIN_OP_CODE:z123qweasd}
+    email: ${ADMIN_EMAIL:2947119343@qq.com}
+  upload:
+    dir: ${UPLOAD_DIR:./uploads}
+
+logging:
+  level:
+    com.marublog: DEBUG
+    org.hibernate.SQL: WARN

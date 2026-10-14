@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { api, extractError } from '@/api/client'
@@ -21,24 +21,24 @@ const msg = ref('')
 const error = ref('')
 
 const isMe = computed(() => {
-  return auth.user?.name === route.params.name || route.path === '/me'
+  return auth.isLoggedIn && auth.user?.name === route.params.name
 })
 
 const isGuest = computed(() => profile.value?.role === 'GUEST')
 const isAdmin = computed(() => profile.value?.role === 'ADMIN')
 
-const LEVEL_NAMES = ['新父', '小小父', '小父', '中父', '大父', '大大父', '超大父', '巨父', '钢铁父', '救命父']
-const LEVEL_COLORS = ['#4caf50', '#2196f3', '#ff9800', '#9c27b0', '#00bcd4', '#ff5722', '#8bc34a', '#3f51b5', '#245a88', '#ef4045']
+const LEVEL_NAMES = ['幼丸', '新丸', '小小丸', '小丸', '中丸', '大丸', '大大丸', '超大丸', '巨丸', '饭纲丸', '射命丸']
+const LEVEL_COLORS = ['#9e9e9e', '#4caf50', '#2196f3', '#ff9800', '#9c27b0', '#00bcd4', '#ff5722', '#8bc34a', '#3f51b5', '#245a88', '#ef4045']
 
 const badge = computed(() => {
   if (!profile.value) return null
   if (profile.value.role === 'GUEST') return null
   if (profile.value.role === 'ADMIN') {
-    return { text: '姬海棠 LV.0', color: '#a72aab', bg: '#a72aab26', extraTag: 'ADMIN' }
+    return { text: '姬海棠 LV.-1', color: '#a72aab', bg: '#a72aab26', extraTag: 'ADMIN' }
   }
-  const lv = Math.max(1, Math.min(10, profile.value.level || 1))
-  const color = LEVEL_COLORS[lv - 1]
-  return { text: `${LEVEL_NAMES[lv - 1]} LV.${lv}`, color, bg: color + '26' }
+  const lv = Math.max(0, Math.min(10, profile.value.level || 0))
+  const color = LEVEL_COLORS[lv]
+  return { text: `${LEVEL_NAMES[lv]} LV.${lv}`, color, bg: color + '26' }
 })
 
 async function loadProfile() {
@@ -75,8 +75,16 @@ async function onFileChange(e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
+  if (!file.type.startsWith('image/')) {
+    const tip = '只能上传图片文件（jpg/png/gif/webp）'
+    msg.value = tip
+    alert(tip)
+    return
+  }
   if (file.size > 10 * 1024 * 1024) {
-    msg.value = '文件超过 10MB 限制'
+    const tip = '文件超过 10MB 限制，请压缩后再试'
+    msg.value = tip
+    alert(tip)
     return
   }
   uploading.value = true
@@ -90,7 +98,9 @@ async function onFileChange(e: Event) {
     editAvatar.value = res.data.url
     msg.value = '头像已上传'
   } catch (err) {
-    msg.value = extractError(err)
+    const tip = extractError(err) || '上传失败，请重试'
+    msg.value = tip
+    alert('头像上传失败：' + tip)
   } finally {
     uploading.value = false
     input.value = ''
@@ -151,6 +161,15 @@ async function deleteAccount() {
 }
 
 onMounted(loadProfile)
+
+watch(() => route.params.name, () => {
+  editing.value = false
+  open.value = true
+  msg.value = ''
+  error.value = ''
+  profile.value = null
+  loadProfile()
+})
 </script>
 
 <template>
@@ -170,7 +189,7 @@ onMounted(loadProfile)
             <div class="name-row">
               <span class="user-name">{{ profile.name || '未命名' }}</span>
               <template v-if="badge">
-                <span class="level-badge"
+                <span class="level-badge level-badge-clickable" @click="router.push('/levels')"
                       :style="{ borderColor: badge.color, color: badge.color, background: badge.bg }">
                   {{ badge.text }}
                 </span>
@@ -319,6 +338,14 @@ onMounted(loadProfile)
   border: 1px solid;
   border-radius: 10px;
   white-space: nowrap;
+}
+.level-badge-clickable {
+  cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.level-badge-clickable:hover {
+  transform: scale(1.06);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
 }
 .user-sign {
   font-size: 13px;

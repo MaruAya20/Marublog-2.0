@@ -24,13 +24,19 @@ export interface Post {
   author?: User
   likes?: number
   favorites?: number
+  comments?: number
   likedByMe?: boolean
   favoritedByMe?: boolean
+  previewImages?: string[]
+  previewThumbs?: string[]
+  status?: string
 }
-
 export interface PostListResponse {
   posts: Post[]
   total: number
+  page: number
+  pageSize: number
+  hasMore: boolean
 }
 
 export interface Comment {
@@ -67,4 +73,12 @@ export interface SessionResponse {
   token?: string
   user?: User
   message?: string
+}
+
+export interface UserPreference {
+  wallpaper: string | null
+  wallpaperHidden?: boolean
+  opacity: number
+  theme: string | null
+  fontSize: string | null
 }
