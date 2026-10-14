@@ -2,7 +2,7 @@ import { api, extractError } from './client'
 import type { Post, Comment, TagDef, SiteSettings, PostListResponse, UserPreference } from '@/types'
 
 export const postApi = {
-  list: async (params?: { tag?: string; page?: number; pageSize?: number; q?: string }) => {
+  list: async (params?: { tag?: string; page?: number; pageSize?: number; q?: string; authorId?: number }) => {
     const res = await api.get<PostListResponse>('/posts', { params })
     return res.data
   },

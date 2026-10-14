@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { api, extractError } from '@/api/client'
+import { postApi } from '@/api'
+import PostCard from '@/components/PostCard.vue'
 import type { User } from '@/types'
 
 const route = useRoute()
@@ -55,6 +57,91 @@ async function loadProfile() {
   } catch (err) {
     error.value = extractError(err)
   }
+}
+
+const POST_PAGE_SIZE = 8
+const postSlugs = ref<string[]>([])
+const postsLoading = ref(false)
+const postsHasMore = ref(true)
+const postsError = ref('')
+const postsEmpty = ref(false)
+let postPageRef = 1
+let postLoadingRef = false
+let postHasMoreRef = true
+let postBusyRef = false
+let scrollHandlerBound = false
+
+async function loadMorePosts() {
+  if (!profile.value?.id) return
+  if (postBusyRef || postLoadingRef || !postHasMoreRef) return
+  postBusyRef = true
+  postsLoading.value = true
+  postLoadingRef = true
+  postsError.value = ''
+  try {
+    const page = postPageRef
+    const data = await postApi.list({
+      page,
+      pageSize: POST_PAGE_SIZE,
+      authorId: profile.value.id
+    })
+    const newSlugs = (data.posts || []).map((p: any) => p.slug)
+    postSlugs.value = [...postSlugs.value, ...newSlugs.filter(s => !postSlugs.value.includes(s))]
+    const more = Boolean(data.hasMore)
+    postsHasMore.value = more
+    postHasMoreRef = more
+    if (more) postPageRef = page + 1
+    if (page === 1 && newSlugs.length === 0) postsEmpty.value = true
+  } catch (err) {
+    postsError.value = extractError(err)
+  } finally {
+    postBusyRef = false
+    postsLoading.value = false
+    postLoadingRef = false
+  }
+}
+
+function onScroll() {
+  if (!profile.value?.id) return
+  if (!postHasMoreRef || postLoadingRef) return
+  const scrollTop = window.scrollY || document.documentElement.scrollTop || 0
+  const vh = window.innerHeight || 0
+  const docH = document.documentElement.scrollHeight || 0
+  if (scrollTop + vh >= docH - 200) {
+    loadMorePosts()
+  }
+}
+
+function resetPostState() {
+  postSlugs.value = []
+  postsLoading.value = false
+  postsHasMore.value = true
+  postsError.value = ''
+  postsEmpty.value = false
+  postPageRef = 1
+  postLoadingRef = false
+  postHasMoreRef = true
+  postBusyRef = false
+}
+
+function bindScroll() {
+  if (!scrollHandlerBound) {
+    window.addEventListener('scroll', onScroll)
+    scrollHandlerBound = true
+  }
+}
+function unbindScroll() {
+  if (scrollHandlerBound) {
+    window.removeEventListener('scroll', onScroll)
+    scrollHandlerBound = false
+  }
+}
+
+async function loadAllAfterProfile() {
+  resetPostState()
+  bindScroll()
+  await nextTick()
+  await loadMorePosts()
 }
 
 function startEdit() {
@@ -160,16 +247,24 @@ async function deleteAccount() {
   }
 }
 
-onMounted(loadProfile)
+onMounted(async () => {
+  await loadProfile()
+  if (profile.value?.id) loadAllAfterProfile()
+})
 
-watch(() => route.params.name, () => {
+watch(() => route.params.name, async () => {
   editing.value = false
   open.value = true
   msg.value = ''
   error.value = ''
+  unbindScroll()
+  resetPostState()
   profile.value = null
-  loadProfile()
+  await loadProfile()
+  if (profile.value?.id) loadAllAfterProfile()
 })
+
+onBeforeUnmount(unbindScroll)
 </script>
 
 <template>
@@ -214,9 +309,6 @@ watch(() => route.params.name, () => {
             <button v-if="isMe && !isGuest" class="btn-nav" @click.stop="startEdit">
               ✏️ 编辑个人信息
             </button>
-            <button v-if="!isMe && profile.name" class="btn-nav" @click="router.push(`/user/${encodeURIComponent(profile.name || '')}`)">
-              查看文章
-            </button>
           </div>
 
           <div v-else class="edit-form" @click.stop>
@@ -255,6 +347,25 @@ watch(() => route.params.name, () => {
             </div>
           </div>
         </div>
+      </div>
+
+      <div class="posts-section">
+        <h3 class="posts-title">{{ (profile?.name || '用户') }} 的文章</h3>
+
+        <template v-if="postsError">
+          <div class="posts-hint posts-error">{{ postsError }}</div>
+        </template>
+        <template v-else-if="postsEmpty">
+          <div class="posts-hint">{{ profile?.name || '该用户' }} 还没有发布文章~</div>
+        </template>
+        <template v-else-if="postSlugs.length === 0 && postsLoading">
+          <div class="posts-hint">加载中...</div>
+        </template>
+        <template v-else>
+          <PostCard v-for="slug in postSlugs" :key="slug" :slug="slug" />
+          <div v-if="postsLoading" class="posts-hint">加载更多...</div>
+          <div v-else-if="!postsHasMore" class="posts-hint">—— 没有更多了 ——</div>
+        </template>
       </div>
     </template>
   </div>
@@ -483,5 +594,28 @@ watch(() => route.params.name, () => {
   text-align: center;
   padding: 40px;
   color: var(--muted, #6b7280);
+}
+.posts-section {
+  margin-top: 24px;
+}
+.posts-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 12px;
+  color: var(--text, #111827);
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--border, #e5e7eb);
+}
+.posts-hint {
+  text-align: center;
+  padding: 20px;
+  color: var(--muted, #6b7280);
+  font-size: 14px;
+}
+.posts-error {
+  color: #dc2626;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
 }
 </style>
