@@ -40,10 +40,15 @@ function goUser(name?: string) {
 
 function onThumbError(e: Event, origUrl?: string) {
   const img = e.target as HTMLImageElement
-  if (origUrl && img.src !== origUrl) {
+  if ((img as any)._triedFallback) {
+    img.style.display = 'none'
+    return
+  }
+  if (origUrl && img.src !== origUrl && !origUrl.includes('/thumbnail')) {
+    (img as any)._triedFallback = true
     img.src = origUrl
   } else {
-    img.style.visibility = 'hidden'
+    img.style.display = 'none'
   }
 }
 

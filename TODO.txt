@@ -1,0 +1,176 @@
+================================================================
+MaruBlog v2 重构 TODO 计划
+生成时间: 2026-10-15
+================================================================
+
+✓ 后端 (Spring Boot 3 + JPA + Security + JWT)   ≈ 95%
+✓ 前端 (Vue 3 + TS + Vite + Pinia + Router)    ≈ 85%
+★ 功能完整性                                     ≈ 75%
+
+================================================================
+一、前端 — 待完成 / 待优化
+================================================================
+
+[P0 高优先级]
+
+  1. PostEditor 编辑器体验优化
+     - 双栏布局（左 textarea 编辑 / 右实时 markdown 预览）
+     - 上传图片后在编辑器 textarea 内自动展示内联缩略图（让用户
+       看到"图"而不是一长串 ![name](/api/uploads/xxx.jpg)）
+     - 或者提供单独的预览面板 tab 切换
+     - 当前问题：markdown 纯文本模式下图片/音频链接很长，视觉噪音大
+
+  2. 移动端响应式适配
+     - 全局 CSS 媒体查询（@media (max-width: 768px/480px)）
+     - Navbar 汉堡菜单
+     - Profile.vue / PostDetail.vue / PostCard.vue 卡片在窄屏下自适应
+     - PostEditor.vue textarea + toolbar 在移动端的触摸友好性
+     - Home.vue 首页缩略图网格在小屏改为单列
+
+  3. Home.vue 首页增强
+     - 当前已有：文章列表 + 标签筛选 + 缩略图 + 等级徽章
+     - 需增强：热门推荐区块 / 最新评论动态 / 用户活跃排行 / 轮播图
+     - 当前 trackApi.view 埋点已在，后续可用于热门排序
+
+  4. 路由守卫完善
+     - 当前基本功能有了
+     - 需要细化：ADMIN 专属路由 (/admin/*) 前端拦截 + 友好跳转
+
+[P1 中优先级]
+
+  5. Levels.vue 等级系统
+     - 当前只有简单表格 + levelsApi.list()
+     - 需增强：当前用户等级展示 / 升级进度条 / 等级获取规则说明 / 等级权限
+
+  6. Messages.vue 通知系统增强
+     - 当前已有完整 tabs (replies/comments/likes) + unread + markAllRead
+     - 需增强：实时推送（WebSocket / SSE）、通知分类标记、通知删除
+
+  7. 全局深色模式
+     - CSS 变量已有基础结构，加 dark variant 切换按钮
+     - :root.dark { --card-bg:#1e1e1e; --text:#f0f0f0; ... }
+     - Settings.vue 加主题切换选项
+
+  8. 编辑器工具栏增强
+     - 当前有：加粗/斜体/行内代码/代码块/标题/列表/链接/图片占位
+     - 需加：表格、引用、分割线、撤销/重做、字号、快捷键 (Ctrl+B 等)
+
+[P2 低优先级]
+
+  9. 前端测试
+     - Vitest + Vue Test Utils
+     - Auth Store 单元测试、API client mock 测试
+
+  10. SEO / SSR
+      - 当前 SPA 方案对搜索引擎不友好
+      - 可选方案：VuePress 预渲染 / Nuxt 迁移 / SSR 适配
+      - 或直接保持 SPA 只做 meta 标签动态更新
+
+================================================================
+二、后端 — 待完成 / 待优化
+================================================================
+
+[P0 高优先级]
+
+  1. Redis 集成（详见下方 Redis 专题）
+     - Token 黑名单（登出后旧 Token 立即可作废）
+     - SMTP 验证码存 Redis（替换 DB 存储）
+     - API 限流（防止刷注册/刷评论）
+     - 文章浏览量 INCR + 定时批量写回 MySQL
+     - 热点文章/标签缓存
+
+[P1 中优先级]
+
+  2. 后端测试
+     - 0 测试覆盖 → 需要 JUnit 5 + MockMvc
+     - 优先覆盖：AuthService / PostService / 权限边界 / 资源清理
+
+  3. Docker 部署
+     - Dockerfile（backend jar + MySQL）
+     - docker-compose.yml 一键启动
+     - nginx 反代配置（生产环境）
+
+  4. 全文搜索增强
+     - 当前 MySQL LIKE 模糊查询，大数据量性能差
+     - 可选：Meilisearch（轻量）/ Elasticsearch（重型）
+
+[P2 低优先级]
+
+  5. WebSocket 实时通知
+     - 评论/点赞实时推送给被通知人
+     - 在线状态 SADD online:users
+
+  6. 分布式架构（第二个项目）
+     - JPA → MyBatis 全量替换（本项目保留 JPA）
+     - 微服务拆分 / 服务注册发现 / 配置中心
+
+================================================================
+三、Redis 集成详细规划
+================================================================
+
+详见下方 "Redis 学习与项目应用" 章节。
+
+本项目 Redis 应用优先级：
+  (1) Token 黑名单        ← 安全补丁，立竿见影
+  (2) 验证码存 Redis      ← 去掉一条 DB 写入
+  (3) API 限流            ← 防 SMTP 被刷
+  (4) 浏览量 INCR + 批量写 ← 高频写优化
+  (5) 热点缓存            ← 高频读优化
+
+================================================================
+四、技术债 & 清理
+================================================================
+
+  - Settings.vue 壁纸上传逻辑较复杂，可封装独立 composable (useWallpaper.ts)
+  - PostCard.vue 与 PostDetail.vue 存在大量重复代码（markdown 渲染、点赞收藏、评论组件等）
+    → 可抽取公共组件 PostBody / CommentTree
+  - 用户注销 deleteUser 里的 postRepository.findAll() 内存遍历 → 数据量大时要分页
+  - 资源清理缺少"引用计数"机制（同一张图被两个文章引用时删一篇会误删）
+    → 当前 Upload 模型设计是"每用必传"，不存在共享引用，暂时安全
+
+================================================================
+五、已完成功能清单
+================================================================
+
+后端:
+  ✓ AuthService (密码登录 / SMTP 验证码登录 / JWT refresh / logout)
+  ✓ UserService (CRUD / updateAvatar / updateProfile / deleteUser 含全链路资源清理)
+  ✓ UserPreference (壁纸 / 透明度 / 主题 / wallpaperHidden / 换壁纸自动删旧资源)
+  ✓ UploadService (文件上传 / Thumbnailator 缩略图 / 按 URL 反推删除 / content 批量清理)
+  ✓ PostService (CRUD / 草稿 / 发布 / Markdown excerpt 截取 / cleanupOrphanUploads / deletePost 清理 content uploads)
+  ✓ CommentService (登录+访客评论 / parentId 嵌套 / tree 接口 / 软删除)
+  ✓ LikeService / FavoriteService (toggle / count / byMe)
+  ✓ TagService (CRUD / 颜色 / 文章关联)
+  ✓ AdminService (用户封禁 / 评论封禁 / AdminLog / AdminSession)
+  ✓ Spring Security + JwtFilter + BCrypt
+  ✓ 全局异常处理 @RestControllerAdvice
+
+前端:
+  ✓ Login.vue (密码 + 验证码双模式)
+  ✓ Home.vue (文章列表 + 标签筛选 + 缩略图降级 + 等级徽章 + 埋点)
+  ✓ Profile.vue (用户信息卡 + 无限滚动文章流 + 内嵌评论 + PostCard 组件复用)
+  ✓ PostCard.vue (文章主体 + 标签 + 点赞收藏 + 内嵌评论树 + 图片查看器)
+  ✓ PostDetail.vue (完整文章详情 + markdown 渲染 + 评论 + 点赞收藏)
+  ✓ PostEditor.vue (图片/音频上传 + 自动保存 + 草稿恢复 + beforeunload 防丢失 + 工具栏)
+  ✓ Settings.vue (壁纸上传 + URL + 透明度滑块 + 实时 DOM 预览 + 保存显式刷新)
+  ✓ Messages.vue (通知信箱 + replies/comments/likes 三类 tab + unread + markAllRead)
+  ✓ Tags.vue (标签列表 + 颜色 + 点击筛选)
+  ✓ Drafts.vue (草稿箱)
+  ✓ ImageViewer.vue (图片查看器)
+  ✓ Navbar.vue (导航 + 登录态 + 头像菜单)
+  ✓ stores/auth.ts (Pinia auth store)
+  ✓ api/index.ts + api/client.ts (axios 实例 + 所有 API 模块)
+  ✓ router/index.ts (路由表 + 守卫 + /me 越权漏洞已移除)
+  ✓ style.css (全局样式 + CSS 变量主题 + .app::before 壁纸层 + Markdown 渲染样式)
+
+安全修复:
+  ✓ /me 路由越权漏洞 (已移除，统一 /user/:name + 用户名匹配)
+  ✓ 壁纸更换旧 upload 清理 (MePreferenceController)
+  ✓ 头像更换旧 upload 清理 (UserService.updateAvatar/updateProfile)
+  ✓ 文章删除 content 内 uploads 清理 (PostService.deletePost)
+  ✓ 用户注销全链路 uploads 清理 (UserService.deleteUser)
+  ✓ 文章编辑 orphan uploads 清理 (PostService.cleanupOrphanUploads)
+  ✓ axios FormData Content-Type 手动设置 bug (已移除)
+  ✓ 组件复用数据残留 (watch route.params.name 重置状态)
+
+================================================================

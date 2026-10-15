@@ -5,7 +5,8 @@ import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const auth = useAuthStore()
-const menuOpen = ref(false)
+const avatarMenuOpen = ref(false)
+const mobileMenuOpen = ref(false)
 
 onMounted(() => {
   auth.initFromStorage()
@@ -22,12 +23,14 @@ const initial = computed(() => {
 
 function handleLogout() {
   auth.logout()
-  menuOpen.value = false
+  avatarMenuOpen.value = false
+  mobileMenuOpen.value = false
   router.push('/')
 }
 
 function goProfile() {
-  menuOpen.value = false
+  avatarMenuOpen.value = false
+  mobileMenuOpen.value = false
   const name = auth.user?.name
   if (name) {
     router.push(`/user/${encodeURIComponent(name)}`)
@@ -35,12 +38,16 @@ function goProfile() {
     router.push('/')
   }
 }
+
+function closeMobile() {
+  mobileMenuOpen.value = false
+}
 </script>
 
 <template>
   <header class="topbar">
     <div class="topbar-inner">
-      <router-link to="/" class="brand">
+      <router-link to="/" class="brand" @click="closeMobile">
         <img src="/favicon.png" alt="logo" class="brand-icon" />
         <span class="brand-text">MaruBlog</span>
       </router-link>
@@ -57,27 +64,16 @@ function goProfile() {
         <router-link v-if="auth.isLoggedIn" to="/drafts" class="nav-link" active-class="active">📝 草稿</router-link>
 
         <template v-if="auth.isLoggedIn">
-          <div class="avatar-wrapper" @click.stop="menuOpen = !menuOpen">
-            <button class="avatar-btn" :class="{ 'menu-open': menuOpen }" aria-haspopup="menu">
-              <img v-if="auth.user?.avatar?.startsWith('/') || auth.user?.avatar?.startsWith('http')"
-                   :src="auth.user.avatar" alt="avatar" class="avatar-img" />
-              <img v-else-if="auth.user?.avatar"
-                   :src="auth.user.avatar" alt="avatar" class="avatar-img" />
+          <div class="avatar-wrapper" @click.stop="avatarMenuOpen = !avatarMenuOpen">
+            <button class="avatar-btn" :class="{ 'menu-open': avatarMenuOpen }" aria-haspopup="menu">
+              <img v-if="auth.user?.avatar" :src="auth.user.avatar" alt="avatar" class="avatar-img" />
               <span v-else class="avatar-initial">{{ initial }}</span>
             </button>
-            <div v-if="menuOpen" class="avatar-menu" role="menu">
-              <button class="menu-item" @click="goProfile">
-                👤 个人主页
-              </button>
-              <button class="menu-item" @click="menuOpen = false; router.push('/settings')">
-                ⚙️ 设置
-              </button>
-              <button class="menu-item" @click="menuOpen = false; router.push('/levels')">
-                🏆 等级体系
-              </button>
-              <button class="menu-item danger" @click="handleLogout">
-                🚪 退出登录
-              </button>
+            <div v-if="avatarMenuOpen" class="avatar-menu" role="menu">
+              <button class="menu-item" @click="goProfile">👤 个人主页</button>
+              <button class="menu-item" @click="avatarMenuOpen = false; router.push('/settings')">⚙️ 设置</button>
+              <button class="menu-item" @click="avatarMenuOpen = false; router.push('/levels')">🏆 等级体系</button>
+              <button class="menu-item danger" @click="handleLogout">🚪 退出登录</button>
             </div>
           </div>
         </template>
@@ -86,7 +82,41 @@ function goProfile() {
           <router-link to="/login" class="nav-link login-btn">登录</router-link>
         </template>
       </nav>
+
+      <button class="hamburger" @click="mobileMenuOpen = !mobileMenuOpen" :class="{ open: mobileMenuOpen }" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
     </div>
+
+    <div v-if="mobileMenuOpen" class="mobile-overlay" @click="closeMobile"></div>
+    <nav v-if="mobileMenuOpen" class="mobile-menu">
+      <template v-if="auth.isLoggedIn">
+        <div class="mobile-profile">
+          <img v-if="auth.user?.avatar" :src="auth.user.avatar" class="mobile-avatar" />
+          <span v-else class="mobile-avatar-initial">{{ initial }}</span>
+          <div class="mobile-profile-info">
+            <div class="mobile-name">{{ auth.user?.name }}</div>
+            <div class="mobile-email">{{ auth.user?.email }}</div>
+          </div>
+        </div>
+      </template>
+      <router-link to="/" class="mobile-link" active-class="active" @click="closeMobile">🏠 发现</router-link>
+      <router-link v-if="auth.isLoggedIn && auth.user?.name"
+                   :to="`/user/${encodeURIComponent(auth.user.name)}`"
+                   class="mobile-link" active-class="active" @click="closeMobile">👤 我的主页</router-link>
+      <router-link to="/tags" class="mobile-link" active-class="active" @click="closeMobile">🏷️ 标签</router-link>
+      <router-link v-if="auth.isLoggedIn" to="/new" class="mobile-link write-btn" @click="closeMobile">✍️ 写文章</router-link>
+      <router-link v-if="auth.isLoggedIn" to="/messages" class="mobile-link" active-class="active" @click="closeMobile">📬 信箱</router-link>
+      <router-link v-if="auth.isLoggedIn" to="/drafts" class="mobile-link" active-class="active" @click="closeMobile">📝 草稿箱</router-link>
+      <router-link v-if="auth.isLoggedIn" to="/settings" class="mobile-link" active-class="active" @click="closeMobile">⚙️ 设置</router-link>
+      <router-link v-if="auth.isLoggedIn" to="/levels" class="mobile-link" active-class="active" @click="closeMobile">🏆 等级</router-link>
+      <template v-if="auth.isLoggedIn">
+        <button class="mobile-link danger" @click="handleLogout">🚪 退出登录</button>
+      </template>
+      <template v-else>
+        <router-link to="/login" class="mobile-link login-btn" @click="closeMobile">登录 / 注册</router-link>
+      </template>
+    </nav>
   </header>
 </template>
 
@@ -142,28 +172,16 @@ function goProfile() {
   border: none;
   background: transparent;
 }
-.nav-link:hover {
-  background: var(--hover, rgba(0,0,0,0.05));
-}
+.nav-link:hover { background: var(--hover, rgba(0,0,0,0.05)); }
 .nav-link.active {
   background: var(--hover, rgba(0,0,0,0.05));
   color: var(--brand, #5f4dbf);
 }
-.write-btn {
-  color: var(--brand, #5f4dbf);
-  font-weight: 600;
-}
-.login-btn {
-  background: var(--brand, #5f4dbf);
-  color: #fff;
-}
-.login-btn:hover {
-  background: var(--brand-hover, #4a3da8);
-  color: #fff;
-}
-.avatar-wrapper {
-  position: relative;
-}
+.write-btn { color: var(--brand, #5f4dbf); font-weight: 600; }
+.login-btn { background: var(--brand, #5f4dbf); color: #fff; }
+.login-btn:hover { background: var(--brand-hover, #4a3da8); color: #fff; }
+
+.avatar-wrapper { position: relative; }
 .avatar-btn {
   width: 36px;
   height: 36px;
@@ -175,24 +193,10 @@ function goProfile() {
   background: linear-gradient(135deg, rgba(95,77,191,0.25), rgba(159,122,234,0.25));
   transition: border-color 0.15s;
 }
-.avatar-btn:hover {
-  border-color: var(--brand, #5f4dbf);
-}
-.avatar-btn.menu-open {
-  border-color: var(--brand, #5f4dbf);
-}
-.avatar-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 50%;
-}
-.avatar-initial {
-  font-weight: 700;
-  font-size: 14px;
-  color: var(--text, #374151);
-  line-height: 32px;
-}
+.avatar-btn.menu-open { border-color: var(--brand, #5f4dbf); }
+.avatar-img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.avatar-initial { font-weight: 700; font-size: 14px; color: var(--text, #374151); line-height: 32px; }
+
 .avatar-menu {
   position: absolute;
   right: 0;
@@ -222,13 +226,121 @@ function goProfile() {
   color: var(--text, #374151);
   transition: background 0.1s;
 }
-.menu-item:hover {
-  background: var(--hover, rgba(0,0,0,0.05));
+.menu-item:hover { background: var(--hover, rgba(0,0,0,0.05)); }
+.menu-item.danger { color: #dc2626; }
+.menu-item.danger:hover { background: rgba(220,38,38,0.08); }
+
+.hamburger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  gap: 5px;
+  border-radius: 8px;
+  transition: background 0.15s;
 }
-.menu-item.danger {
-  color: #dc2626;
+.hamburger:hover { background: var(--hover, rgba(0,0,0,0.05)); }
+.hamburger span {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: var(--text, #374151);
+  border-radius: 2px;
+  transition: transform 0.2s, opacity 0.2s;
 }
-.menu-item.danger:hover {
-  background: rgba(220,38,38,0.08);
+.hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.hamburger.open span:nth-child(2) { opacity: 0; }
+.hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+.mobile-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.3);
+  z-index: 149;
+}
+.mobile-menu {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 280px;
+  max-width: 80vw;
+  background: var(--card-bg, #fff);
+  border-left: 1px solid var(--border, #e5e7eb);
+  z-index: 150;
+  padding: 60px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: -4px 0 16px rgba(0,0,0,0.08);
+  animation: slideIn 0.2s ease-out;
+  overflow-y: auto;
+}
+@keyframes slideIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.mobile-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px 20px;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+  margin-bottom: 12px;
+}
+.mobile-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--brand, #5f4dbf);
+}
+.mobile-avatar-initial {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(95,77,191,0.25), rgba(159,122,234,0.25));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--text, #374151);
+  border: 2px solid var(--brand, #5f4dbf);
+}
+.mobile-profile-info { flex: 1; min-width: 0; }
+.mobile-name { font-weight: 600; font-size: 15px; color: var(--text, #374151); }
+.mobile-email { font-size: 12px; color: var(--text-secondary, #6b7280); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.mobile-link {
+  padding: 12px 14px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--text, #374151);
+  font-size: 15px;
+  font-weight: 500;
+  transition: background 0.15s;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  text-align: left;
+  width: 100%;
+}
+.mobile-link:hover { background: var(--hover, rgba(0,0,0,0.05)); }
+.mobile-link.active { background: var(--hover, rgba(0,0,0,0.05)); color: var(--brand, #5f4dbf); }
+.mobile-link.write-btn { color: var(--brand, #5f4dbf); font-weight: 600; }
+.mobile-link.danger { color: #dc2626; }
+.mobile-link.danger:hover { background: rgba(220,38,38,0.08); }
+.mobile-link.login-btn { background: var(--brand, #5f4dbf); color: #fff; text-align: center; margin-top: 8px; }
+.mobile-link.login-btn:hover { background: var(--brand-hover, #4a3da8); }
+
+@media (max-width: 640px) {
+  .nav-links { display: none; }
+  .hamburger { display: flex; }
 }
 </style>
