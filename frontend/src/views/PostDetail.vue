@@ -78,7 +78,7 @@ function startReply(c: any) {
     mentionUserId: c.userId,
   }
   commentContent.value = ''
-  setTimeout(() => document.querySelector('.comment-input textarea')?.focus(), 50)
+  setTimeout(() => (document.querySelector('.comment-input textarea') as HTMLElement)?.focus(), 50)
 }
 
 function cancelReply() {

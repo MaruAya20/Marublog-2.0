@@ -1,0 +1,257 @@
+import re
+import sys
+
+INPUT = "marublog_full_data.sql"
+OUTPUT = "marublog_mysql_ready.sql"
+
+TABLE_MAP = {
+    "User": "user",
+    "Post": "post",
+    "Comment": "comment",
+    "Like": "`like`",
+    "Favorite": "favorite",
+    "Upload": "upload",
+    "TagDef": "tag_def",
+    "UserPreference": "user_preference",
+    "LoginCode": "login_code",
+    "RateLimit": "rate_limit",
+    "PageView": "page_view",
+    "SiteSettings": "site_settings",
+    "UserLikedAward": "user_liked_award",
+    "AdminSession": "admin_session",
+    "AdminLog": "admin_log",
+    "UserBan": "user_ban",
+    "CommentBan": "comment_ban",
+}
+
+COLUMN_MAP = {
+    "createdAt": "created_at",
+    "publishedAt": "published_at",
+    "scheduledAt": "scheduled_at",
+    "authorId": "author_id",
+    "userId": "user_id",
+    "postId": "post_id",
+    "statsDate": "stats_date",
+    "postsToday": "posts_today",
+    "xpToday": "xp_today",
+    "lastCommentAt": "last_comment_at",
+    "originalName": "original_name",
+    "guestName": "guest_name",
+    "adminId": "admin_id",
+    "targetType": "target_type",
+    "targetId": "target_id",
+    "fontSize": "font_size",
+    "lastAt": "last_at",
+    "at": "created_at",
+}
+
+TABLE_COLUMN_OVERRIDES = {
+    "PageView": {"at": "created_at"},
+}
+
+DROP_TABLES = {
+    "LoginCode",
+    "RateLimit",
+    "AdminSession",
+    "AdminLog",
+    "UserLikedAward",
+    "UserBan",
+    "CommentBan",
+    "SiteSettings",
+}
+
+def parse_sql_values(s):
+    values = []
+    i = 0
+    n = len(s)
+    while i < n:
+        if s[i] == "'":
+            j = i + 1
+            buf = []
+            while j < n:
+                if s[j] == "'" and j + 1 < n and s[j+1] == "'":
+                    buf.append("'")
+                    j += 2
+                elif s[j] == "'":
+                    j += 1
+                    break
+                elif s[j] == "\n":
+                    buf.append("\\n")
+                    j += 1
+                elif s[j] == "\r":
+                    buf.append("\\r")
+                    j += 1
+                elif s[j] == "\t":
+                    buf.append("\\t")
+                    j += 1
+                elif s[j] == "\\":
+                    buf.append("\\\\")
+                    j += 1
+                else:
+                    buf.append(s[j])
+                    j += 1
+            escaped = "".join(buf).replace("'", "''")
+            values.append("'" + escaped + "'")
+            i = j
+        elif s[i] == "N":
+            if s[i:i+4] == "NULL":
+                values.append("NULL")
+                i += 4
+            else:
+                values.append(s[i])
+                i += 1
+        elif s[i].isdigit() or s[i] == "-" or s[i] == ".":
+            j = i
+            while j < n and (s[j].isdigit() or s[j] in "-."):
+                j += 1
+            values.append(s[i:j])
+            i = j
+        elif s[i:i+5] == "false":
+            values.append("0")
+            i += 5
+        elif s[i:i+4] == "true":
+            values.append("1")
+            i += 4
+        elif s[i] == "," or s[i] == " " or s[i] == "(":
+            i += 1
+        else:
+            values.append(s[i])
+            i += 1
+    return values
+
+def convert_pg_array_to_json(val):
+    if val == "NULL":
+        return val
+    if not val.startswith("'") or not val.endswith("'"):
+        return val
+    inner = val[1:-1]
+    if inner == "{}":
+        return "'[]'"
+    inner_stripped = inner.strip("{}")
+    items = [x.strip().strip("'") for x in inner_stripped.split(",")]
+    json_arr = "[" + ",".join('"{}"'.format(re.sub(r'"', r'\\"', it)) for it in items) + "]"
+    return "'" + json_arr + "'"
+
+def convert_upload_kind(val):
+    if val == "'OTHER'":
+        return "'POST_IMAGE'"
+    return val
+
+def convert_url(val):
+    if val == "NULL":
+        return val
+    inner = val.strip("'")
+    if "/uploads/" in inner and "/api/uploads/" not in inner:
+        inner = inner.replace("/uploads/", "/api/uploads/")
+    return "'" + inner + "'"
+
+def main():
+    print(f"Reading {INPUT}...")
+    with open(INPUT, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    content = re.sub(r"\\restrict \S+", "", content)
+    content = re.sub(r"SET .*?;", "", content)
+    content = re.sub(r"SELECT .*?;", "", content)
+    content = re.sub(r"--.*", "", content)
+    content = re.sub(r"\n+", "\n", content)
+
+    lines = content.split("\n")
+    inserts = []
+    current = ""
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("INSERT INTO"):
+            if current:
+                inserts.append(current)
+            current = stripped
+        elif stripped and current:
+            current += " " + stripped
+    if current:
+        inserts.append(current)
+
+    print(f"Found {len(inserts)} INSERT statements")
+
+    output_lines = [
+        "-- ========================================",
+        "-- MaruBlog PostgreSQL -> MySQL Migration  ",
+        "-- Generated by convert_pg_to_mysql.py     ",
+        "-- ========================================",
+        "",
+        "SET NAMES utf8mb4;",
+        "SET FOREIGN_KEY_CHECKS = 0;",
+        "",
+    ]
+
+    skip_count = 0
+    convert_count = 0
+    table_counts = {}
+
+    for stmt in inserts:
+        m = re.match(r"INSERT INTO public\.\"(\w+)\"\s*\((.+?)\)\s*VALUES\s*\((.+)\);", stmt, re.DOTALL)
+        if not m:
+            continue
+
+        pg_table = m.group(1)
+        pg_cols_raw = m.group(2)
+        pg_vals_raw = m.group(3)
+
+        if pg_table in DROP_TABLES:
+            skip_count += 1
+            continue
+
+        if pg_table not in TABLE_MAP:
+            print(f"  [SKIP] Unknown table: {pg_table}")
+            skip_count += 1
+            continue
+
+        mysql_table = TABLE_MAP[pg_table]
+        pg_cols = [c.strip().strip('"') for c in pg_cols_raw.split(",")]
+
+        mysql_cols = []
+        for c in pg_cols:
+            if c in COLUMN_MAP:
+                mysql_cols.append(COLUMN_MAP[c])
+            else:
+                mysql_cols.append(c)
+
+        raw_vals = parse_sql_values(pg_vals_raw)
+
+        converted_vals = []
+        for col, val in zip(mysql_cols, raw_vals):
+            if pg_table == "Post" and col == "tags":
+                val = convert_pg_array_to_json(val)
+            if pg_table == "Upload" and col == "kind":
+                val = convert_upload_kind(val)
+            if col in ("url", "avatar", "content", "wallpaper"):
+                val = convert_url(val)
+            converted_vals.append(val)
+
+        col_list = ", ".join(mysql_cols)
+        val_list = ", ".join(converted_vals)
+
+        output_lines.append(
+            f"INSERT INTO {mysql_table} ({col_list}) VALUES ({val_list});"
+        )
+
+        table_counts[pg_table] = table_counts.get(pg_table, 0) + 1
+        convert_count += 1
+
+    output_lines.extend([
+        "",
+        "SET FOREIGN_KEY_CHECKS = 1;",
+        "",
+    ])
+
+    with open(OUTPUT, "w", encoding="utf-8") as f:
+        f.write("\n".join(output_lines))
+
+    print(f"\nDone! Output: {OUTPUT}")
+    print(f"  Converted: {convert_count} INSERTs")
+    print(f"  Skipped:   {skip_count} INSERTs (tables: {', '.join(sorted(DROP_TABLES))})")
+    print(f"\nPer-table breakdown:")
+    for t, c in sorted(table_counts.items()):
+        print(f"  {t:25s} -> {TABLE_MAP.get(t, '???'):20s}: {c} rows")
+
+if __name__ == "__main__":
+    main()

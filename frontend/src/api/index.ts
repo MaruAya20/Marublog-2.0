@@ -89,6 +89,10 @@ export const uploadApi = {
     const res = await api.post<{ url: string; name: string; size: number; mime: string }>('/upload', fd)
     return res.data
   },
+  delete: async (url: string) => {
+    const res = await api.delete('/upload', { params: { url } })
+    return res.data
+  },
 }
 
 export const notificationApi = {
