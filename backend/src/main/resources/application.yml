@@ -7,9 +7,10 @@ server:
     max-swallow-size: -1
 
 spring:
+  config:
+    import: "optional:file:../.env[.properties]"
   application:
     name: marublog-backend
-
   mail:
     host: ${SMTP_HOST:smtp.qq.com}
     port: ${SMTP_PORT:465}
@@ -26,13 +27,11 @@ spring:
             required: true
           connectiontimeout: 10000
           timeout: 10000
-
   datasource:
     url: jdbc:mysql://localhost:3306/marublog?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci
     username: root
     password: z123qweasd
     driver-class-name: com.mysql.cj.jdbc.Driver
-
   jpa:
     hibernate:
       ddl-auto: update
@@ -42,11 +41,38 @@ spring:
         format_sql: true
         jdbc.time_zone: Asia/Shanghai
     open-in-view: false
-
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 0
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+  cache:
+    type: redis
+    redis:
+      time-to-live: 600000
+      cache-null-values: false
   servlet:
     multipart:
       max-file-size: 50MB
       max-request-size: 50MB
+  ai:
+    openai:
+      api-key: ${AI_API_KEY:}
+      base-url: ${AI_BASE_URL:https://api.deepseek.com}
+      chat:
+        options:
+          model: ${AI_MODEL:deepseek-chat}
+          temperature: 0.7
+          max-tokens: ${AI_MAX_TOKENS:2048}
+
+spring.autoconfigure.exclude: ${AI_EXCLUDE:}
 
 marublog:
   jwt:
@@ -63,6 +89,13 @@ marublog:
     email: ${ADMIN_EMAIL:2947119343@qq.com}
   upload:
     dir: ${UPLOAD_DIR:./uploads}
+  ai:
+    system-prompt: ${AI_SYSTEM_PROMPT:你是 MaruBlog 博客网站的 AI 助手，名字叫 Maru。你性格友好、乐于助人、略带一点俏皮。回答尽量简洁自然，像朋友聊天一样。}
+    max-history-rounds: 10
+    max-context-messages: 20
+    max-input-chars: ${AI_MAX_INPUT_CHARS:1500}
+    per-user-daily-limit: ${AI_PER_USER_DAILY:999999}
+    per-ip-min-limit: ${AI_PER_IP_MINUTE:999999}
 
 logging:
   level:

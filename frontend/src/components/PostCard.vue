@@ -179,6 +179,7 @@ watch(() => props.slug, load)
           <button class="btn-ghost" :class="{ active: post.favoritedByMe }" @click="toggleFavorite">
             {{ post.favoritedByMe ? '⭐' : '☆' }} {{ post.favorites || 0 }}
           </button>
+          <span class="btn-ghost pc-views">👁 {{ post.views ?? 0 }}</span>
           <button class="btn-ghost" @click="goDetail">💬 {{ commentTotal }}</button>
         </div>
 

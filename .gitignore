@@ -25,3 +25,8 @@ uploads/
 
 # ==== 旧项目副本（外面 D:\VSCodeFiles\MaruBlog 还有原始的）====
 MaruBlog/
+# ==== 敏感配置 ====
+.env
+.env.local
+backend/src/main/resources/application-local.yml
+backend/uploads/

@@ -161,6 +161,8 @@ function getTagStyle(name: string) {
             <span class="meta-dot">·</span>
             <span>💬 {{ p.comments ?? 0 }}</span>
             <span class="meta-dot">·</span>
+            <span>👁 {{ p.views ?? 0 }}</span>
+            <span class="meta-dot">·</span>
             <span>♡ {{ p.likes ?? 0 }}</span>
           </div>
           <p v-if="p.excerpt" class="post-excerpt">{{ p.excerpt }}</p>

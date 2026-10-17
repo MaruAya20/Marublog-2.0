@@ -2,15 +2,21 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useNotificationStore } from '@/stores/notification'
+import NotificationBell from './NotificationBell.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
+const notif = useNotificationStore()
 const avatarMenuOpen = ref(false)
 const mobileMenuOpen = ref(false)
 
 onMounted(() => {
   auth.initFromStorage()
   auth.fetchMe()
+  if (auth.isLoggedIn) {
+    notif.startPolling()
+  }
 })
 
 const initial = computed(() => {
@@ -64,6 +70,7 @@ function closeMobile() {
         <router-link v-if="auth.isLoggedIn" to="/drafts" class="nav-link" active-class="active">📝 草稿</router-link>
 
         <template v-if="auth.isLoggedIn">
+          <NotificationBell />
           <div class="avatar-wrapper" @click.stop="avatarMenuOpen = !avatarMenuOpen">
             <button class="avatar-btn" :class="{ 'menu-open': avatarMenuOpen }" aria-haspopup="menu">
               <img v-if="auth.user?.avatar" :src="auth.user.avatar" alt="avatar" class="avatar-img" />
@@ -90,6 +97,9 @@ function closeMobile() {
 
     <div v-if="mobileMenuOpen" class="mobile-overlay" @click="closeMobile"></div>
     <nav v-if="mobileMenuOpen" class="mobile-menu">
+      <button class="mobile-close" @click="closeMobile" aria-label="关闭菜单">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
       <template v-if="auth.isLoggedIn">
         <div class="mobile-profile">
           <img v-if="auth.user?.avatar" :src="auth.user.avatar" class="mobile-avatar" />
@@ -263,23 +273,44 @@ function closeMobile() {
   background: rgba(0,0,0,0.3);
   z-index: 149;
 }
+.mobile-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-color, #333);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+  z-index: 2;
+}
+.mobile-close:hover { background: var(--hover, rgba(0,0,0,0.06)); }
+
 .mobile-menu {
   position: fixed;
   top: 0;
   right: 0;
   bottom: 0;
+  height: 100dvh;
   width: 280px;
-  max-width: 80vw;
+  max-width: 85vw;
   background: var(--card-bg, #fff);
   border-left: 1px solid var(--border, #e5e7eb);
   z-index: 150;
-  padding: 60px 16px 24px;
+  padding: calc(56px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: 2px;
   box-shadow: -4px 0 16px rgba(0,0,0,0.08);
   animation: slideIn 0.2s ease-out;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 @keyframes slideIn {
   from { transform: translateX(100%); }
@@ -339,7 +370,7 @@ function closeMobile() {
 .mobile-link.login-btn { background: var(--brand, #5f4dbf); color: #fff; text-align: center; margin-top: 8px; }
 .mobile-link.login-btn:hover { background: var(--brand-hover, #4a3da8); }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   .nav-links { display: none; }
   .hamburger { display: flex; }
 }

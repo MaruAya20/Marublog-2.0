@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -62,8 +63,37 @@ const router = createRouter({
       name: 'drafts',
       component: () => import('@/views/Drafts.vue'),
       meta: { auth: true }
+    },
+    {
+      path: '/admin',
+      name: 'admin',
+      component: () => import('@/views/Admin.vue'),
+      meta: { auth: true, admin: true }
     }
   ]
+})
+
+router.beforeEach(async (to, _from, next) => {
+  const auth = useAuthStore()
+  if (to.meta.auth && !auth.isLoggedIn) {
+    auth.initFromStorage()
+    if (!auth.isLoggedIn) {
+      return next({ name: 'login', query: { redirect: to.fullPath } })
+    }
+  }
+  if (to.meta.admin) {
+    auth.initFromStorage()
+    if (!auth.isLoggedIn) {
+      return next({ name: 'login', query: { redirect: to.fullPath } })
+    }
+    if (!auth.isAdmin) {
+      try { await auth.fetchMe() } catch {}
+    }
+    if (!auth.isAdmin) {
+      return next({ name: 'home' })
+    }
+  }
+  next()
 })
 
 export default router

@@ -25,6 +25,7 @@ export interface Post {
   likes?: number
   favorites?: number
   comments?: number
+  views?: number
   likedByMe?: boolean
   favoritedByMe?: boolean
   previewImages?: string[]

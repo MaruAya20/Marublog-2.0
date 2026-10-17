@@ -202,6 +202,7 @@ onMounted(load)
           <button class="btn-ghost" @click="toggleFavorite">
             {{ post.favoritedByMe ? '⭐ 已收藏' : '☆ 收藏' }} {{ post.favorites || 0 }}
           </button>
+          <span class="btn-ghost" style="cursor: default;">👁 {{ post.views ?? 0 }}</span>
         </div>
       </article>
 

@@ -1,4 +1,4 @@
-import { api, extractError } from './client'
+﻿import { api, extractError } from './client'
 import type { Post, Comment, TagDef, SiteSettings, PostListResponse, UserPreference } from '@/types'
 
 export const postApi = {
@@ -123,6 +123,41 @@ export const preferenceApi = {
     const res = await api.patch('/me/preference', data)
     return res.data
   },
+}
+
+export const adminApi = {
+  status: async () => {
+    const res = await api.get('/admin/status')
+    return res.data as { isAdmin: boolean; userId: number | null; role: string | null }
+  },
+  stats: async () => {
+    const res = await api.get('/admin/stats')
+    return res.data as Record<string, number | string>
+  },
+  listUsers: async (params?: { keyword?: string; page?: number; pageSize?: number }) => {
+    const res = await api.get('/admin/users', { params })
+    return res.data
+  },
+  listBans: async (params?: { page?: number; pageSize?: number }) => {
+    const res = await api.get('/admin/bans', { params })
+    return res.data
+  },
+  listLogs: async (params?: { page?: number; pageSize?: number }) => {
+    const res = await api.get('/admin/logs', { params })
+    return res.data
+  },
+  banUser: async (data: { userId: number; minutes: number; reason: string; opCode: string }) => {
+    const res = await api.post('/admin/ban-user', data)
+    return res.data
+  },
+  unbanUser: async (data: { userId: number; reason: string; opCode: string }) => {
+    const res = await api.post('/admin/unban-user', data)
+    return res.data
+  },
+  promote: async (data: { userId: number; opCode: string }) => {
+    const res = await api.post('/admin/promote', data)
+    return res.data
+  }
 }
 
 export { extractError }

@@ -3,15 +3,14 @@ import { onMounted, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useWallpaper } from '@/composables/useWallpaper'
 import Navbar from '@/components/Navbar.vue'
-
+import NotificationToast from '@/components/NotificationToast.vue'
+import AiChat from '@/components/AiChat.vue'
 const auth = useAuthStore()
 const wallpaper = useWallpaper()
-
 onMounted(async () => {
   auth.initFromStorage()
   auth.fetchMe()
 })
-
 watch(() => auth.isLoggedIn, (loggedIn) => {
   if (loggedIn) {
     wallpaper.loadFromServer()
@@ -20,7 +19,6 @@ watch(() => auth.isLoggedIn, (loggedIn) => {
   }
 }, { immediate: true })
 </script>
-
 <template>
   <div class="app">
     <Navbar />
@@ -31,6 +29,8 @@ watch(() => auth.isLoggedIn, (loggedIn) => {
         </transition>
       </router-view>
     </main>
+    <NotificationToast />
+    <AiChat />
     <footer class="footer">
       <span>MaruBlog v2 — Spring Boot + Vue 3</span>
     </footer>
