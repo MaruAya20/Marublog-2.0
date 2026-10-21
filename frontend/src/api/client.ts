@@ -1,9 +1,8 @@
 import axios from 'axios'
-import type { ApiError } from '@/types'
 
 export const api = axios.create({
   baseURL: '/api',
-  timeout: 15000,
+  timeout: 60000,
 })
 
 api.interceptors.request.use((config) => {
@@ -15,7 +14,21 @@ api.interceptors.request.use((config) => {
 })
 
 api.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    const body = res.data
+    if (body && typeof body === 'object' && 'ok' in body) {
+      if (!body.ok) {
+        const data = (body.data as any) || {}
+        const err: any = new Error(data.message || body.message || '请求失败')
+        err.code = data.error || body.error
+        return Promise.reject(err)
+      }
+      if ('data' in body) {
+        res.data = body.data
+      }
+    }
+    return res
+  },
   (err) => {
     if (err.response?.status === 401) {
       localStorage.removeItem('token')
@@ -25,11 +38,25 @@ api.interceptors.response.use(
   }
 )
 
+export function unwrap(res: any): any {
+  const body = res.data
+  if (body && typeof body === 'object' && 'ok' in body) {
+    if (!body.ok) {
+      const err = new Error(body.message || '请求失败') as any
+      err.code = body.error
+      throw err
+    }
+    return body.data
+  }
+  return body
+}
+
 export function extractError(err: unknown): string {
   if (axios.isAxiosError(err)) {
-    const data = err.response?.data as ApiError | undefined
+    const data = err.response?.data as any
     if (data?.message) return data.message
     return err.message || '请求失败'
   }
+  if (err instanceof Error) return err.message
   return String(err)
 }

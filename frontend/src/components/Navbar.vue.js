@@ -1,13 +1,19 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
+import { useNotificationStore } from '@/stores/notification';
+import NotificationBell from './NotificationBell.vue';
 const router = useRouter();
 const auth = useAuthStore();
+const notif = useNotificationStore();
 const avatarMenuOpen = ref(false);
 const mobileMenuOpen = ref(false);
 onMounted(() => {
     auth.initFromStorage();
     auth.fetchMe();
+    if (auth.isLoggedIn) {
+        notif.startPolling();
+    }
 });
 const initial = computed(() => {
     const name = auth.user?.name;
@@ -57,6 +63,7 @@ let __VLS_directives;
 /** @type {__VLS_StyleScopedClasses['open']} */ ;
 /** @type {__VLS_StyleScopedClasses['hamburger']} */ ;
 /** @type {__VLS_StyleScopedClasses['open']} */ ;
+/** @type {__VLS_StyleScopedClasses['mobile-close']} */ ;
 /** @type {__VLS_StyleScopedClasses['mobile-link']} */ ;
 /** @type {__VLS_StyleScopedClasses['mobile-link']} */ ;
 /** @type {__VLS_StyleScopedClasses['active']} */ ;
@@ -224,6 +231,10 @@ if (__VLS_ctx.auth.isLoggedIn) {
     var __VLS_35;
 }
 if (__VLS_ctx.auth.isLoggedIn) {
+    /** @type {[typeof NotificationBell, ]} */ ;
+    // @ts-ignore
+    const __VLS_36 = __VLS_asFunctionalComponent(NotificationBell, new NotificationBell({}));
+    const __VLS_37 = __VLS_36({}, ...__VLS_functionalComponentArgsRest(__VLS_36));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ onClick: (...[$event]) => {
                 if (!(__VLS_ctx.auth.isLoggedIn))
@@ -288,19 +299,19 @@ if (__VLS_ctx.auth.isLoggedIn) {
     }
 }
 else {
-    const __VLS_36 = {}.RouterLink;
+    const __VLS_39 = {}.RouterLink;
     /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.routerLink, typeof __VLS_components.RouterLink, typeof __VLS_components.routerLink, ]} */ ;
     // @ts-ignore
-    const __VLS_37 = __VLS_asFunctionalComponent(__VLS_36, new __VLS_36({
+    const __VLS_40 = __VLS_asFunctionalComponent(__VLS_39, new __VLS_39({
         to: "/login",
         ...{ class: "nav-link login-btn" },
     }));
-    const __VLS_38 = __VLS_37({
+    const __VLS_41 = __VLS_40({
         to: "/login",
         ...{ class: "nav-link login-btn" },
-    }, ...__VLS_functionalComponentArgsRest(__VLS_37));
-    __VLS_39.slots.default;
-    var __VLS_39;
+    }, ...__VLS_functionalComponentArgsRest(__VLS_40));
+    __VLS_42.slots.default;
+    var __VLS_42;
 }
 __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
     ...{ onClick: (...[$event]) => {
@@ -322,6 +333,23 @@ if (__VLS_ctx.mobileMenuOpen) {
 if (__VLS_ctx.mobileMenuOpen) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.nav, __VLS_intrinsicElements.nav)({
         ...{ class: "mobile-menu" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (__VLS_ctx.closeMobile) },
+        ...{ class: "mobile-close" },
+        'aria-label': "关闭菜单",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.svg, __VLS_intrinsicElements.svg)({
+        width: "22",
+        height: "22",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "currentColor",
+        'stroke-width': "2",
+        'stroke-linecap': "round",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.path)({
+        d: "M18 6L6 18M6 6l12 12",
     });
     if (__VLS_ctx.auth.isLoggedIn) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -351,199 +379,199 @@ if (__VLS_ctx.mobileMenuOpen) {
         });
         (__VLS_ctx.auth.user?.email);
     }
-    const __VLS_40 = {}.RouterLink;
+    const __VLS_43 = {}.RouterLink;
     /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.routerLink, typeof __VLS_components.RouterLink, typeof __VLS_components.routerLink, ]} */ ;
     // @ts-ignore
-    const __VLS_41 = __VLS_asFunctionalComponent(__VLS_40, new __VLS_40({
+    const __VLS_44 = __VLS_asFunctionalComponent(__VLS_43, new __VLS_43({
         ...{ 'onClick': {} },
         to: "/",
         ...{ class: "mobile-link" },
         activeClass: "active",
     }));
-    const __VLS_42 = __VLS_41({
+    const __VLS_45 = __VLS_44({
         ...{ 'onClick': {} },
         to: "/",
         ...{ class: "mobile-link" },
         activeClass: "active",
-    }, ...__VLS_functionalComponentArgsRest(__VLS_41));
-    let __VLS_44;
-    let __VLS_45;
-    let __VLS_46;
-    const __VLS_47 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_44));
+    let __VLS_47;
+    let __VLS_48;
+    let __VLS_49;
+    const __VLS_50 = {
         onClick: (__VLS_ctx.closeMobile)
     };
-    __VLS_43.slots.default;
-    var __VLS_43;
+    __VLS_46.slots.default;
+    var __VLS_46;
     if (__VLS_ctx.auth.isLoggedIn && __VLS_ctx.auth.user?.name) {
-        const __VLS_48 = {}.RouterLink;
+        const __VLS_51 = {}.RouterLink;
         /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.routerLink, typeof __VLS_components.RouterLink, typeof __VLS_components.routerLink, ]} */ ;
         // @ts-ignore
-        const __VLS_49 = __VLS_asFunctionalComponent(__VLS_48, new __VLS_48({
+        const __VLS_52 = __VLS_asFunctionalComponent(__VLS_51, new __VLS_51({
             ...{ 'onClick': {} },
             to: (`/user/${encodeURIComponent(__VLS_ctx.auth.user.name)}`),
             ...{ class: "mobile-link" },
             activeClass: "active",
         }));
-        const __VLS_50 = __VLS_49({
+        const __VLS_53 = __VLS_52({
             ...{ 'onClick': {} },
             to: (`/user/${encodeURIComponent(__VLS_ctx.auth.user.name)}`),
             ...{ class: "mobile-link" },
             activeClass: "active",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_49));
-        let __VLS_52;
-        let __VLS_53;
-        let __VLS_54;
-        const __VLS_55 = {
+        }, ...__VLS_functionalComponentArgsRest(__VLS_52));
+        let __VLS_55;
+        let __VLS_56;
+        let __VLS_57;
+        const __VLS_58 = {
             onClick: (__VLS_ctx.closeMobile)
         };
-        __VLS_51.slots.default;
-        var __VLS_51;
+        __VLS_54.slots.default;
+        var __VLS_54;
     }
-    const __VLS_56 = {}.RouterLink;
+    const __VLS_59 = {}.RouterLink;
     /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.routerLink, typeof __VLS_components.RouterLink, typeof __VLS_components.routerLink, ]} */ ;
     // @ts-ignore
-    const __VLS_57 = __VLS_asFunctionalComponent(__VLS_56, new __VLS_56({
+    const __VLS_60 = __VLS_asFunctionalComponent(__VLS_59, new __VLS_59({
         ...{ 'onClick': {} },
         to: "/tags",
         ...{ class: "mobile-link" },
         activeClass: "active",
     }));
-    const __VLS_58 = __VLS_57({
+    const __VLS_61 = __VLS_60({
         ...{ 'onClick': {} },
         to: "/tags",
         ...{ class: "mobile-link" },
         activeClass: "active",
-    }, ...__VLS_functionalComponentArgsRest(__VLS_57));
-    let __VLS_60;
-    let __VLS_61;
-    let __VLS_62;
-    const __VLS_63 = {
+    }, ...__VLS_functionalComponentArgsRest(__VLS_60));
+    let __VLS_63;
+    let __VLS_64;
+    let __VLS_65;
+    const __VLS_66 = {
         onClick: (__VLS_ctx.closeMobile)
     };
-    __VLS_59.slots.default;
-    var __VLS_59;
+    __VLS_62.slots.default;
+    var __VLS_62;
     if (__VLS_ctx.auth.isLoggedIn) {
-        const __VLS_64 = {}.RouterLink;
+        const __VLS_67 = {}.RouterLink;
         /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.routerLink, typeof __VLS_components.RouterLink, typeof __VLS_components.routerLink, ]} */ ;
         // @ts-ignore
-        const __VLS_65 = __VLS_asFunctionalComponent(__VLS_64, new __VLS_64({
+        const __VLS_68 = __VLS_asFunctionalComponent(__VLS_67, new __VLS_67({
             ...{ 'onClick': {} },
             to: "/new",
             ...{ class: "mobile-link write-btn" },
         }));
-        const __VLS_66 = __VLS_65({
+        const __VLS_69 = __VLS_68({
             ...{ 'onClick': {} },
             to: "/new",
             ...{ class: "mobile-link write-btn" },
-        }, ...__VLS_functionalComponentArgsRest(__VLS_65));
-        let __VLS_68;
-        let __VLS_69;
-        let __VLS_70;
-        const __VLS_71 = {
+        }, ...__VLS_functionalComponentArgsRest(__VLS_68));
+        let __VLS_71;
+        let __VLS_72;
+        let __VLS_73;
+        const __VLS_74 = {
             onClick: (__VLS_ctx.closeMobile)
         };
-        __VLS_67.slots.default;
-        var __VLS_67;
+        __VLS_70.slots.default;
+        var __VLS_70;
     }
     if (__VLS_ctx.auth.isLoggedIn) {
-        const __VLS_72 = {}.RouterLink;
+        const __VLS_75 = {}.RouterLink;
         /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.routerLink, typeof __VLS_components.RouterLink, typeof __VLS_components.routerLink, ]} */ ;
         // @ts-ignore
-        const __VLS_73 = __VLS_asFunctionalComponent(__VLS_72, new __VLS_72({
+        const __VLS_76 = __VLS_asFunctionalComponent(__VLS_75, new __VLS_75({
             ...{ 'onClick': {} },
             to: "/messages",
             ...{ class: "mobile-link" },
             activeClass: "active",
         }));
-        const __VLS_74 = __VLS_73({
+        const __VLS_77 = __VLS_76({
             ...{ 'onClick': {} },
             to: "/messages",
             ...{ class: "mobile-link" },
             activeClass: "active",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_73));
-        let __VLS_76;
-        let __VLS_77;
-        let __VLS_78;
-        const __VLS_79 = {
+        }, ...__VLS_functionalComponentArgsRest(__VLS_76));
+        let __VLS_79;
+        let __VLS_80;
+        let __VLS_81;
+        const __VLS_82 = {
             onClick: (__VLS_ctx.closeMobile)
         };
-        __VLS_75.slots.default;
-        var __VLS_75;
+        __VLS_78.slots.default;
+        var __VLS_78;
     }
     if (__VLS_ctx.auth.isLoggedIn) {
-        const __VLS_80 = {}.RouterLink;
+        const __VLS_83 = {}.RouterLink;
         /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.routerLink, typeof __VLS_components.RouterLink, typeof __VLS_components.routerLink, ]} */ ;
         // @ts-ignore
-        const __VLS_81 = __VLS_asFunctionalComponent(__VLS_80, new __VLS_80({
+        const __VLS_84 = __VLS_asFunctionalComponent(__VLS_83, new __VLS_83({
             ...{ 'onClick': {} },
             to: "/drafts",
             ...{ class: "mobile-link" },
             activeClass: "active",
         }));
-        const __VLS_82 = __VLS_81({
+        const __VLS_85 = __VLS_84({
             ...{ 'onClick': {} },
             to: "/drafts",
             ...{ class: "mobile-link" },
             activeClass: "active",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_81));
-        let __VLS_84;
-        let __VLS_85;
-        let __VLS_86;
-        const __VLS_87 = {
+        }, ...__VLS_functionalComponentArgsRest(__VLS_84));
+        let __VLS_87;
+        let __VLS_88;
+        let __VLS_89;
+        const __VLS_90 = {
             onClick: (__VLS_ctx.closeMobile)
         };
-        __VLS_83.slots.default;
-        var __VLS_83;
+        __VLS_86.slots.default;
+        var __VLS_86;
     }
     if (__VLS_ctx.auth.isLoggedIn) {
-        const __VLS_88 = {}.RouterLink;
+        const __VLS_91 = {}.RouterLink;
         /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.routerLink, typeof __VLS_components.RouterLink, typeof __VLS_components.routerLink, ]} */ ;
         // @ts-ignore
-        const __VLS_89 = __VLS_asFunctionalComponent(__VLS_88, new __VLS_88({
+        const __VLS_92 = __VLS_asFunctionalComponent(__VLS_91, new __VLS_91({
             ...{ 'onClick': {} },
             to: "/settings",
             ...{ class: "mobile-link" },
             activeClass: "active",
         }));
-        const __VLS_90 = __VLS_89({
+        const __VLS_93 = __VLS_92({
             ...{ 'onClick': {} },
             to: "/settings",
             ...{ class: "mobile-link" },
             activeClass: "active",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_89));
-        let __VLS_92;
-        let __VLS_93;
-        let __VLS_94;
-        const __VLS_95 = {
+        }, ...__VLS_functionalComponentArgsRest(__VLS_92));
+        let __VLS_95;
+        let __VLS_96;
+        let __VLS_97;
+        const __VLS_98 = {
             onClick: (__VLS_ctx.closeMobile)
         };
-        __VLS_91.slots.default;
-        var __VLS_91;
+        __VLS_94.slots.default;
+        var __VLS_94;
     }
     if (__VLS_ctx.auth.isLoggedIn) {
-        const __VLS_96 = {}.RouterLink;
+        const __VLS_99 = {}.RouterLink;
         /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.routerLink, typeof __VLS_components.RouterLink, typeof __VLS_components.routerLink, ]} */ ;
         // @ts-ignore
-        const __VLS_97 = __VLS_asFunctionalComponent(__VLS_96, new __VLS_96({
+        const __VLS_100 = __VLS_asFunctionalComponent(__VLS_99, new __VLS_99({
             ...{ 'onClick': {} },
             to: "/levels",
             ...{ class: "mobile-link" },
             activeClass: "active",
         }));
-        const __VLS_98 = __VLS_97({
+        const __VLS_101 = __VLS_100({
             ...{ 'onClick': {} },
             to: "/levels",
             ...{ class: "mobile-link" },
             activeClass: "active",
-        }, ...__VLS_functionalComponentArgsRest(__VLS_97));
-        let __VLS_100;
-        let __VLS_101;
-        let __VLS_102;
-        const __VLS_103 = {
+        }, ...__VLS_functionalComponentArgsRest(__VLS_100));
+        let __VLS_103;
+        let __VLS_104;
+        let __VLS_105;
+        const __VLS_106 = {
             onClick: (__VLS_ctx.closeMobile)
         };
-        __VLS_99.slots.default;
-        var __VLS_99;
+        __VLS_102.slots.default;
+        var __VLS_102;
     }
     if (__VLS_ctx.auth.isLoggedIn) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
@@ -552,27 +580,27 @@ if (__VLS_ctx.mobileMenuOpen) {
         });
     }
     else {
-        const __VLS_104 = {}.RouterLink;
+        const __VLS_107 = {}.RouterLink;
         /** @type {[typeof __VLS_components.RouterLink, typeof __VLS_components.routerLink, typeof __VLS_components.RouterLink, typeof __VLS_components.routerLink, ]} */ ;
         // @ts-ignore
-        const __VLS_105 = __VLS_asFunctionalComponent(__VLS_104, new __VLS_104({
+        const __VLS_108 = __VLS_asFunctionalComponent(__VLS_107, new __VLS_107({
             ...{ 'onClick': {} },
             to: "/login",
             ...{ class: "mobile-link login-btn" },
         }));
-        const __VLS_106 = __VLS_105({
+        const __VLS_109 = __VLS_108({
             ...{ 'onClick': {} },
             to: "/login",
             ...{ class: "mobile-link login-btn" },
-        }, ...__VLS_functionalComponentArgsRest(__VLS_105));
-        let __VLS_108;
-        let __VLS_109;
-        let __VLS_110;
-        const __VLS_111 = {
+        }, ...__VLS_functionalComponentArgsRest(__VLS_108));
+        let __VLS_111;
+        let __VLS_112;
+        let __VLS_113;
+        const __VLS_114 = {
             onClick: (__VLS_ctx.closeMobile)
         };
-        __VLS_107.slots.default;
-        var __VLS_107;
+        __VLS_110.slots.default;
+        var __VLS_110;
     }
 }
 /** @type {__VLS_StyleScopedClasses['topbar']} */ ;
@@ -604,6 +632,7 @@ if (__VLS_ctx.mobileMenuOpen) {
 /** @type {__VLS_StyleScopedClasses['hamburger']} */ ;
 /** @type {__VLS_StyleScopedClasses['mobile-overlay']} */ ;
 /** @type {__VLS_StyleScopedClasses['mobile-menu']} */ ;
+/** @type {__VLS_StyleScopedClasses['mobile-close']} */ ;
 /** @type {__VLS_StyleScopedClasses['mobile-profile']} */ ;
 /** @type {__VLS_StyleScopedClasses['mobile-avatar']} */ ;
 /** @type {__VLS_StyleScopedClasses['mobile-avatar-initial']} */ ;
@@ -627,6 +656,7 @@ var __VLS_dollars;
 const __VLS_self = (await import('vue')).defineComponent({
     setup() {
         return {
+            NotificationBell: NotificationBell,
             router: router,
             auth: auth,
             avatarMenuOpen: avatarMenuOpen,

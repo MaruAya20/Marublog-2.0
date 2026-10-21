@@ -83,7 +83,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, nextTick, computed } from 'vue'
-import { api } from '@/api/client'
+import { api, unwrap } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
 
@@ -109,7 +109,7 @@ async function loadSessions() {
   }
   try {
     const res = await api.get('/ai/sessions')
-    sessions.value = res.data.data || []
+    sessions.value = unwrap(res) || []
     if (sessions.value.length > 0 && !currentSessionId.value) {
       currentSessionId.value = sessions.value[0].id
       await loadMessages(currentSessionId.value)
@@ -120,7 +120,7 @@ async function loadSessions() {
 async function loadMessages(sessionId: number) {
   try {
     const res = await api.get(`/ai/sessions/${sessionId}/messages`)
-    messages.value = res.data.data || []
+    messages.value = unwrap(res) || []
     await nextTick()
     scrollToBottom()
   } catch {}
@@ -134,7 +134,7 @@ async function selectSession(s: any) {
 async function newSession() {
   try {
     const res = await api.post('/ai/sessions', {})
-    const session = res.data.data
+    const session = unwrap(res)
     sessions.value.unshift(session)
     currentSessionId.value = session.id
     messages.value = []
@@ -158,13 +158,13 @@ async function deleteSession(id: number) {
 
 async function sendMessage(text?: string) {
   const content = (text ?? input.value).trim()
-  if (!content || loading.value || !auth.isLoggedIn) return
+  if (!content || loading.value) return
 
-  if (!currentSessionId.value) {
+  if (auth.isLoggedIn && !currentSessionId.value) {
     try {
       const res = await api.post('/ai/sessions', {})
-      currentSessionId.value = res.data.data.id
-      sessions.value.unshift(res.data.data)
+      currentSessionId.value = unwrap(res).id
+      sessions.value.unshift(unwrap(res))
     } catch { return }
   }
 
@@ -177,15 +177,23 @@ async function sendMessage(text?: string) {
   scrollToBottom()
 
   try {
-    const res = await api.post('/ai/chat', { sessionId: currentSessionId.value, content })
-    const aiMsg = res.data.data
-    messages.value.push(aiMsg)
-    const s = sessions.value.find(x => x.id === currentSessionId.value)
-    if (s && (s.title === '新对话' || s.title === '新对话')) {
-      s.title = content.length > 20 ? content.substring(0, 20) + '...' : content
+    const payload: any = { content }
+    if (currentSessionId.value) payload.sessionId = currentSessionId.value
+    const res = await api.post('/ai/chat', payload)
+    const d: any = unwrap(res)
+    if (d && d.sessionId && !currentSessionId.value) {
+      currentSessionId.value = d.sessionId
+    }
+    messages.value.push({ role: 'ASSISTANT', content: d?.reply || '(无回复)', id: Date.now() + 1 })
+    if (auth.isLoggedIn && Array.isArray(sessions.value)) {
+      const s = sessions.value.find((x: any) => x.id === currentSessionId.value)
+      if (s && (!s.title || s.title === '新对话')) {
+        s.title = content.length > 20 ? content.substring(0, 20) + '...' : content
+      }
     }
   } catch (err: any) {
-    messages.value.push({ id: Date.now() + 1, role: 'ASSISTANT', content: '抱歉，发送失败了，请稍后再试。' })
+    const msg = err?.message || '发送失败'
+    messages.value.push({ id: Date.now() + 1, role: 'ASSISTANT', content: '抱歉，发送失败：' + msg })
   } finally {
     loading.value = false
     await nextTick()

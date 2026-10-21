@@ -2,6 +2,8 @@ import { onMounted, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useWallpaper } from '@/composables/useWallpaper';
 import Navbar from '@/components/Navbar.vue';
+import NotificationToast from '@/components/NotificationToast.vue';
+import AiChat from '@/components/AiChat.vue';
 const auth = useAuthStore();
 const wallpaper = useWallpaper();
 onMounted(async () => {
@@ -58,6 +60,14 @@ const __VLS_5 = __VLS_4({}, ...__VLS_functionalComponentArgsRest(__VLS_4));
     __VLS_6.slots['' /* empty slot name completion */];
 }
 var __VLS_6;
+/** @type {[typeof NotificationToast, ]} */ ;
+// @ts-ignore
+const __VLS_15 = __VLS_asFunctionalComponent(NotificationToast, new NotificationToast({}));
+const __VLS_16 = __VLS_15({}, ...__VLS_functionalComponentArgsRest(__VLS_15));
+/** @type {[typeof AiChat, ]} */ ;
+// @ts-ignore
+const __VLS_18 = __VLS_asFunctionalComponent(AiChat, new AiChat({}));
+const __VLS_19 = __VLS_18({}, ...__VLS_functionalComponentArgsRest(__VLS_18));
 __VLS_asFunctionalElement(__VLS_intrinsicElements.footer, __VLS_intrinsicElements.footer)({
     ...{ class: "footer" },
 });
@@ -70,6 +80,8 @@ const __VLS_self = (await import('vue')).defineComponent({
     setup() {
         return {
             Navbar: Navbar,
+            NotificationToast: NotificationToast,
+            AiChat: AiChat,
         };
     },
 });

@@ -75,6 +75,10 @@ spring:
 spring.autoconfigure.exclude: ${AI_EXCLUDE:}
 
 marublog:
+  embedding:
+    base-url: ${EMBEDDING_BASE_URL:https://tokenhub.tencentmaas.com}
+    api-key: ${EMBEDDING_API_KEY:sk-J89ubbyNvZfM6sQ2FcfEpqIqpERv0IKW5m1E2AN0d57PFFZ6}
+    model: ${EMBEDDING_MODEL:kinfra-text-embedding-0.6b}
   jwt:
     secret: ${JWT_SECRET:dev-secret-change-me-in-production-please-1234567890}
     expiration-ms: 604800000

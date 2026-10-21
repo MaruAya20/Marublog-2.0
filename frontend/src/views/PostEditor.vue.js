@@ -267,12 +267,18 @@ async function handleAudioFile(file) {
     }
 }
 async function removeImage(item) {
-    try { await uploadApi.delete(item.url) } catch {}
+    try {
+        await uploadApi.delete(item.url);
+    }
+    catch { }
     images.value = images.value.filter(x => x.url !== item.url);
     content.value = content.value.replace(item.snippet, '');
 }
 async function removeAudio(item) {
-    try { await uploadApi.delete(item.url) } catch {}
+    try {
+        await uploadApi.delete(item.url);
+    }
+    catch { }
     audios.value = audios.value.filter(x => x.url !== item.url);
     content.value = content.value.replace(item.snippet, '');
 }

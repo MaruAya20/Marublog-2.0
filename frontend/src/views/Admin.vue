@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue'
-import { adminApi } from '@/api'
+import { adminApi, unwrap } from '@/api'
 import { extractError } from '@/api'
 
 type TabKey = 'dashboard' | 'users' | 'bans' | 'logs'

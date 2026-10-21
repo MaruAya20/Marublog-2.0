@@ -311,6 +311,10 @@ else if (__VLS_ctx.post) {
     });
     (__VLS_ctx.post.favoritedByMe ? '⭐' : '☆');
     (__VLS_ctx.post.favorites || 0);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "btn-ghost pc-views" },
+    });
+    (__VLS_ctx.post.views ?? 0);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (__VLS_ctx.goDetail) },
         ...{ class: "btn-ghost" },
@@ -491,6 +495,8 @@ var __VLS_2;
 /** @type {__VLS_StyleScopedClasses['pc-actions']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-ghost']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-ghost']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-ghost']} */ ;
+/** @type {__VLS_StyleScopedClasses['pc-views']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-ghost']} */ ;
 /** @type {__VLS_StyleScopedClasses['pc-comments']} */ ;
 /** @type {__VLS_StyleScopedClasses['pc-comments-title']} */ ;

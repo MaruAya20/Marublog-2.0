@@ -304,6 +304,11 @@ else if (__VLS_ctx.post) {
     });
     (__VLS_ctx.post.favoritedByMe ? '⭐ 已收藏' : '☆ 收藏');
     (__VLS_ctx.post.favorites || 0);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+        ...{ class: "btn-ghost" },
+        ...{ style: {} },
+    });
+    (__VLS_ctx.post.views ?? 0);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "card" },
     });
@@ -471,6 +476,7 @@ else if (__VLS_ctx.post) {
 /** @type {__VLS_StyleScopedClasses['tag']} */ ;
 /** @type {__VLS_StyleScopedClasses['post-content']} */ ;
 /** @type {__VLS_StyleScopedClasses['markdown-body']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn-ghost']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-ghost']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn-ghost']} */ ;
 /** @type {__VLS_StyleScopedClasses['card']} */ ;

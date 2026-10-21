@@ -88,7 +88,7 @@ onUnmounted(() => {
               {{ t.type === 'COMMENT' ? '评论了你' : t.type === 'REPLY' ? '回复了你' : t.type === 'LIKE' ? '点赞了你' : '通知你' }}
             </span>
           </div>
-          <div class="preview">{{ t.content || t.postTitle || '' }}</div>
+          <div class="preview">{{ t.content || t["postTitle"] as any || '' }}</div>
         </div>
         <button class="close" @click.stop="dismiss(t.id)">✕</button>
       </div>
