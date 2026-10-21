@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue'
-import { adminApi, unwrap } from '@/api'
-import { extractError } from '@/api'
+import { adminApi, aiApi, unwrap, extractError } from '@/api'
 
-type TabKey = 'dashboard' | 'users' | 'bans' | 'logs'
+type TabKey = 'dashboard' | 'users' | 'bans' | 'logs' | 'ai'
 
 const activeTab = ref<TabKey>('dashboard')
 
@@ -88,6 +87,7 @@ function switchTab(tab: TabKey) {
   if (tab === 'users' && users.value.length === 0) loadUsers()
   if (tab === 'bans' && bans.value.length === 0) loadBans()
   if (tab === 'logs' && logs.value.length === 0) loadLogs()
+  if (tab === 'ai') loadAiTab()
 }
 
 function openOpModal(type: 'ban' | 'unban' | 'promote', userId: number, extra?: any) {
@@ -139,6 +139,168 @@ function banFlow(userId: number) {
   banReason.value = ''
   openOpModal('ban', userId, { minutes: banMinutes.value, reason: banReason.value })
 }
+
+// ==================== AI / RAG Tab ====================
+
+const personas = ref<any[]>([])
+const selectedPersona = ref<any>(null)
+const loadingPersonas = ref(false)
+const personaError = ref('')
+const personaSaved = ref('')
+
+const ragStatsData = ref<any>(null)
+const loadingRagStats = ref(false)
+const reindexing = ref(false)
+const reindexMsg = ref('')
+
+const chatHistory = ref<{ role: string; content: string; time?: string }[]>([])
+const chatInput = ref('')
+const chatLoading = ref(false)
+const chatSessionId = ref<number | null>(null)
+const chatError = ref('')
+
+async function loadPersonas() {
+  loadingPersonas.value = true
+  personaError.value = ''
+  try {
+    const list = await aiApi.listPersonas()
+    personas.value = Array.isArray(list) ? list : []
+    if (!selectedPersona.value && personas.value.length > 0) {
+      const def = personas.value.find((p: any) => p.default) || personas.value[0]
+      selectedPersona.value = { ...def }
+    }
+  } catch (err) {
+    personaError.value = extractError(err)
+  } finally {
+    loadingPersonas.value = false
+  }
+}
+
+async function loadRagStats() {
+  loadingRagStats.value = true
+  try {
+    ragStatsData.value = await aiApi.ragStats()
+  } catch (err) {
+    ragStatsData.value = { totalChunks: 0, indexedPosts: 0, embeddingAvailable: false }
+  } finally {
+    loadingRagStats.value = false
+  }
+}
+
+function loadAiTab() {
+  if (personas.value.length === 0) loadPersonas()
+  if (!ragStatsData.value) loadRagStats()
+}
+
+function selectPersona(p: any) {
+  selectedPersona.value = { ...p }
+  personaError.value = ''
+  personaSaved.value = ''
+}
+
+function newPersona() {
+  selectedPersona.value = {
+    id: null,
+    name: '新角色',
+    avatar: '',
+    soulPrompt: '你是一个...',
+    styleExamples: '',
+    default: false
+  }
+  personaError.value = ''
+  personaSaved.value = ''
+}
+
+async function savePersona() {
+  if (!selectedPersona.value) return
+  personaError.value = ''
+  personaSaved.value = ''
+  try {
+    let saved: any
+    if (selectedPersona.value.id) {
+      saved = await aiApi.updatePersona(selectedPersona.value)
+    } else {
+      saved = await aiApi.createPersona(selectedPersona.value)
+    }
+    personaSaved.value = '已保存 ✓'
+    await loadPersonas()
+    selectedPersona.value = { ...saved }
+    setTimeout(() => { personaSaved.value = '' }, 2000)
+  } catch (err) {
+    personaError.value = extractError(err)
+  }
+}
+
+async function setDefault(id: number) {
+  try {
+    await aiApi.setDefaultPersona(id)
+    await loadPersonas()
+    const p = personas.value.find((x: any) => x.id === id)
+    if (p) selectedPersona.value = { ...p }
+  } catch (err) {
+    personaError.value = extractError(err)
+  }
+}
+
+async function removePersona(id: number) {
+  if (!confirm('确定删除该人设吗？')) return
+  try {
+    await aiApi.deletePersona(id)
+    await loadPersonas()
+    if (selectedPersona.value?.id === id) {
+      selectedPersona.value = personas.value[0] ? { ...personas.value[0] } : null
+    }
+  } catch (err) {
+    personaError.value = extractError(err)
+  }
+}
+
+async function doReindex() {
+  reindexing.value = true
+  reindexMsg.value = ''
+  try {
+    const res = await aiApi.reindexAll()
+    reindexMsg.value = res.message || `重建完成：${res.chunks} 个文本块`
+    await loadRagStats()
+  } catch (err) {
+    reindexMsg.value = '重建失败：' + extractError(err)
+  } finally {
+    reindexing.value = false
+  }
+}
+
+async function sendChat() {
+  const content = chatInput.value.trim()
+  if (!content || chatLoading.value) return
+  chatLoading.value = true
+  chatError.value = ''
+  chatHistory.value.push({ role: 'user', content })
+  chatInput.value = ''
+  try {
+    const res = await aiApi.chat({ content, sessionId: chatSessionId.value })
+    chatSessionId.value = res.sessionId
+    chatHistory.value.push({
+      role: 'assistant',
+      content: res.reply || '(无回复)',
+      time: res.createdAt || ''
+    })
+  } catch (err) {
+    chatError.value = extractError(err)
+    chatHistory.value.pop()
+  } finally {
+    chatLoading.value = false
+  }
+}
+
+function clearChat() {
+  chatHistory.value = []
+  chatSessionId.value = null
+  chatError.value = ''
+}
+
+onMounted(() => {
+  loadStats()
+})
 </script>
 
 <template>
@@ -147,7 +309,13 @@ function banFlow(userId: number) {
 
     <div class="tabs">
       <button
-        v-for="t in [{ k: 'dashboard', n: '📊 仪表盘' }, { k: 'users', n: '👥 用户管理' }, { k: 'bans', n: '🚫 封禁列表' }, { k: 'logs', n: '📝 操作日志' }]"
+        v-for="t in [
+          { k: 'dashboard', n: '📊 仪表盘' },
+          { k: 'users', n: '👥 用户管理' },
+          { k: 'bans', n: '🚫 封禁列表' },
+          { k: 'logs', n: '📝 操作日志' },
+          { k: 'ai', n: '🤖 AI 人设 & RAG' }
+        ]"
         :key="t.k"
         class="tab-btn"
         :class="{ active: activeTab === t.k }"
@@ -273,6 +441,143 @@ function banFlow(userId: number) {
       </div>
     </div>
 
+    <!-- AI & RAG Tab -->
+    <div v-if="activeTab === 'ai'" class="tab-content ai-tab">
+      <div class="ai-columns">
+        <!-- Left: Persona List -->
+        <div class="ai-col ai-col-left">
+          <div class="ai-col-header">
+            <h3>🎭 人设列表</h3>
+            <button class="btn-primary-sm" @click="newPersona">+ 新建</button>
+          </div>
+          <div v-if="loadingPersonas" class="ai-loading">加载中...</div>
+          <div v-else-if="personas.length === 0" class="ai-empty">暂无人设</div>
+          <div v-else class="persona-list">
+            <div
+              v-for="p in personas"
+              :key="p.id"
+              class="persona-item"
+              :class="{ active: selectedPersona?.id === p.id }"
+              @click="selectPersona(p)"
+            >
+              <div class="persona-avatar">
+                <img v-if="p.avatar" :src="p.avatar" :alt="p.name" />
+                <span v-else>{{ (p.name || '?').charAt(0) }}</span>
+              </div>
+              <div class="persona-info">
+                <div class="persona-name">
+                  {{ p.name }}
+                  <span v-if="p.default" class="default-badge">默认</span>
+                </div>
+                <div class="persona-sub">{{ p.soulPrompt?.slice(0, 30) || '...' }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Middle: Persona Editor -->
+        <div class="ai-col ai-col-mid">
+          <div class="ai-col-header">
+            <h3>✏️ 人设编辑</h3>
+            <div class="ai-actions" v-if="selectedPersona">
+              <button
+                v-if="!selectedPersona.default"
+                class="btn-ghost-sm"
+                @click="setDefault(selectedPersona.id)"
+              >设为默认</button>
+              <button
+                v-if="selectedPersona.id"
+                class="btn-danger-sm"
+                @click="removePersona(selectedPersona.id)"
+              >删除</button>
+              <button class="btn-primary-sm" @click="savePersona">💾 保存</button>
+            </div>
+          </div>
+
+          <div v-if="!selectedPersona" class="ai-empty">从左侧选择或新建人设</div>
+          <div v-else class="persona-editor">
+            <div class="form-row">
+              <label>角色名称</label>
+              <input v-model="selectedPersona.name" class="form-input" placeholder="例如：Maru" />
+            </div>
+            <div class="form-row">
+              <label>头像 URL</label>
+              <input v-model="selectedPersona.avatar" class="form-input" placeholder="https://..." />
+            </div>
+            <div class="form-row">
+              <label>灵魂提示词（System Prompt）</label>
+              <textarea v-model="selectedPersona.soulPrompt" rows="6" class="form-input mono" placeholder="你是一个...请以...的语气回答"></textarea>
+            </div>
+            <div class="form-row">
+              <label>风格示例（Style Examples，每行一条）</label>
+              <textarea v-model="selectedPersona.styleExamples" rows="5" class="form-input mono" placeholder="用户：你好&#10;助手：嘿~今天想聊点什么？"></textarea>
+            </div>
+            <div v-if="personaSaved" class="success-msg">{{ personaSaved }}</div>
+            <div v-if="personaError" class="error-msg">{{ personaError }}</div>
+          </div>
+        </div>
+
+        <!-- Right: RAG Stats + Chat Test -->
+        <div class="ai-col ai-col-right">
+          <div class="ai-col-header">
+            <h3>📊 RAG 监控</h3>
+          </div>
+          <div class="rag-stats">
+            <div class="rag-stat">
+              <div class="rag-stat-num">{{ loadingRagStats ? '...' : (ragStatsData?.totalChunks ?? 0) }}</div>
+              <div class="rag-stat-label">向量块总数</div>
+            </div>
+            <div class="rag-stat">
+              <div class="rag-stat-num">{{ loadingRagStats ? '...' : (ragStatsData?.indexedPosts ?? 0) }}</div>
+              <div class="rag-stat-label">已索引文章</div>
+            </div>
+            <div class="rag-stat">
+              <div class="rag-stat-num">
+                <span :class="ragStatsData?.embeddingAvailable ? 'ok' : 'bad'">
+                  {{ loadingRagStats ? '...' : (ragStatsData?.embeddingAvailable ? '● 可用' : '○ 离线') }}
+                </span>
+              </div>
+              <div class="rag-stat-label">Embedding 服务</div>
+            </div>
+          </div>
+          <button class="btn-primary full-width" :disabled="reindexing" @click="doReindex">
+            {{ reindexing ? '重建中...' : '🔄 全量重建索引' }}
+          </button>
+          <div v-if="reindexMsg" class="rag-msg" :class="{ error: reindexMsg.includes('失败') }">{{ reindexMsg }}</div>
+
+          <div class="ai-col-header" style="margin-top: 20px;">
+            <h3>💬 对话测试</h3>
+            <button class="btn-ghost-sm" @click="clearChat">清空</button>
+          </div>
+          <div class="chat-test-area">
+            <div class="chat-history">
+              <div v-if="chatHistory.length === 0" class="ai-empty">输入消息开始测试 AI 对话</div>
+              <div v-for="(m, i) in chatHistory" :key="i" class="chat-msg" :class="m.role">
+                <div class="chat-bubble">{{ m.content }}</div>
+                <div v-if="m.time" class="chat-time">{{ m.time }}</div>
+              </div>
+              <div v-if="chatLoading" class="chat-msg assistant">
+                <div class="chat-bubble">思考中...</div>
+              </div>
+            </div>
+            <div v-if="chatError" class="error-msg">{{ chatError }}</div>
+            <div class="chat-input-row">
+              <textarea
+                v-model="chatInput"
+                rows="2"
+                class="form-input"
+                placeholder="输入测试消息..."
+                @keydown.enter.ctrl="sendChat"
+              ></textarea>
+              <button class="btn-primary" :disabled="chatLoading || !chatInput.trim()" @click="sendChat">
+                发送
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Ban dialog -->
     <div v-if="pendingAction?.type === 'ban' && showOpModal" class="modal-overlay" @click.self="showOpModal = false">
       <div class="modal">
@@ -326,12 +631,13 @@ function banFlow(userId: number) {
 </template>
 
 <style scoped>
-.admin-page { max-width: 1200px; margin: 0 auto; padding: 20px; }
+.admin-page { max-width: 1400px; margin: 0 auto; padding: 20px; }
 .page-title { font-size: 24px; margin-bottom: 20px; }
 
 .tabs {
   display: flex; gap: 4px; margin-bottom: 20px;
   border-bottom: 2px solid var(--border, #e5e7eb);
+  flex-wrap: wrap;
 }
 .tab-btn {
   padding: 10px 18px; background: transparent; border: none;
@@ -390,6 +696,11 @@ function banFlow(userId: number) {
   border: none; border-radius: 6px; cursor: pointer; font-size: 14px;
 }
 .btn-primary:hover { opacity: 0.9; }
+.btn-primary-sm {
+  padding: 4px 10px; background: var(--accent, #4f46e5); color: #fff;
+  border: none; border-radius: 4px; cursor: pointer; font-size: 12px;
+}
+.btn-primary-sm:hover { opacity: 0.9; }
 .btn-danger {
   padding: 10px 20px; background: #dc2626; color: #fff;
   border: none; border-radius: 6px; cursor: pointer; font-size: 14px;
@@ -440,8 +751,124 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .form-input {
   width: 100%; padding: 8px 12px; border: 1px solid var(--border, #e5e7eb);
   border-radius: 6px; font-size: 14px; box-sizing: border-box; font-family: inherit;
+  resize: vertical;
 }
+.form-input.mono { font-family: 'Consolas', 'Monaco', monospace; font-size: 13px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
 .error-msg { background: #fee2e2; color: #991b1b; padding: 8px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 8px; }
 .success-msg { background: #d1fae5; color: #065f46; padding: 8px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 8px; }
+
+/* ===== AI Tab ===== */
+.ai-tab { padding: 16px; }
+.ai-columns {
+  display: grid;
+  grid-template-columns: 240px 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 1100px) {
+  .ai-columns { grid-template-columns: 1fr; }
+}
+.ai-col {
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  padding: 16px;
+  min-height: 500px;
+  display: flex;
+  flex-direction: column;
+}
+.ai-col-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 12px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+}
+.ai-col-header h3 { margin: 0; font-size: 15px; }
+.ai-actions { display: flex; gap: 6px; }
+.ai-loading, .ai-empty {
+  text-align: center; color: var(--text-muted, #888);
+  padding: 40px 10px; font-size: 13px;
+}
+
+/* Persona list */
+.persona-list { flex: 1; overflow-y: auto; }
+.persona-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px; border-radius: 8px; cursor: pointer;
+  margin-bottom: 6px; border: 1px solid transparent;
+  transition: background 0.15s;
+}
+.persona-item:hover { background: #f3f4f6; }
+.persona-item.active { background: #eef2ff; border-color: var(--accent, #4f46e5); }
+.persona-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--accent, #4f46e5); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 600; overflow: hidden; flex-shrink: 0;
+}
+.persona-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.persona-info { flex: 1; min-width: 0; }
+.persona-name { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.persona-sub { font-size: 11px; color: var(--text-muted, #888); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.default-badge {
+  background: #fef3c7; color: #92400e; font-size: 10px;
+  padding: 1px 6px; border-radius: 8px; font-weight: 500;
+}
+
+/* Persona editor */
+.persona-editor { flex: 1; overflow-y: auto; }
+
+/* RAG stats */
+.rag-stats {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 10px; margin-bottom: 12px;
+}
+.rag-stat {
+  background: #f9fafb; border-radius: 8px; padding: 12px; text-align: center;
+}
+.rag-stat-num {
+  font-size: 22px; font-weight: 700; color: var(--accent, #4f46e5);
+}
+.rag-stat-num .ok { color: #059669; }
+.rag-stat-num .bad { color: #dc2626; }
+.rag-stat-label { font-size: 11px; color: var(--text-muted, #888); margin-top: 4px; }
+.full-width { width: 100%; padding: 10px; }
+.rag-msg {
+  margin-top: 8px; font-size: 12px; padding: 8px 10px;
+  background: #d1fae5; color: #065f46; border-radius: 6px;
+}
+.rag-msg.error { background: #fee2e2; color: #991b1b; }
+
+/* Chat test */
+.chat-test-area { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.chat-history {
+  flex: 1; overflow-y: auto;
+  background: #f9fafb; border-radius: 8px;
+  padding: 10px; margin-bottom: 10px;
+  min-height: 200px; max-height: 350px;
+}
+.chat-msg { margin-bottom: 10px; }
+.chat-msg.user { text-align: right; }
+.chat-msg.assistant { text-align: left; }
+.chat-bubble {
+  display: inline-block;
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.chat-msg.user .chat-bubble {
+  background: var(--accent, #4f46e5);
+  color: #fff;
+  border-bottom-right-radius: 2px;
+}
+.chat-msg.assistant .chat-bubble {
+  background: #fff;
+  color: #333;
+  border: 1px solid var(--border, #e5e7eb);
+  border-bottom-left-radius: 2px;
+}
+.chat-time { font-size: 10px; color: var(--text-muted, #aaa); margin-top: 2px; }
+.chat-input-row { display: flex; gap: 8px; align-items: flex-end; }
+.chat-input-row textarea { flex: 1; }
 </style>

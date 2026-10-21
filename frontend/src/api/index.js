@@ -149,4 +149,46 @@ export const adminApi = {
     }
 };
 export { extractError };
+export const aiApi = {
+    getPersona: async () => {
+        const res = await api.get('/ai/persona');
+        return unwrap(res);
+    },
+    listPersonas: async () => {
+        const res = await api.get('/ai/personas');
+        return unwrap(res);
+    },
+    updatePersona: async (data) => {
+        const res = await api.put('/ai/admin/persona', data);
+        return unwrap(res);
+    },
+    createPersona: async (data) => {
+        const res = await api.post('/ai/admin/persona', data);
+        return unwrap(res);
+    },
+    setDefaultPersona: async (id) => {
+        const res = await api.post('/ai/admin/persona/' + id + '/set-default');
+        return unwrap(res);
+    },
+    deletePersona: async (id) => {
+        const res = await api.delete('/ai/admin/persona/' + id);
+        return unwrap(res);
+    },
+    chat: async (data) => {
+        const res = await api.post('/ai/chat', data);
+        return unwrap(res);
+    },
+    reindexAll: async () => {
+        const res = await api.post('/ai/admin/reindex');
+        return unwrap(res);
+    },
+    reindexOne: async (postId) => {
+        const res = await api.post('/ai/admin/reindex/' + postId);
+        return unwrap(res);
+    },
+    ragStats: async () => {
+        const res = await api.get('/ai/admin/stats');
+        return unwrap(res);
+    }
+};
 export { unwrap } from './client';

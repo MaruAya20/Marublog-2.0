@@ -1,3 +1,4 @@
+/// <reference types="../../node_modules/.vue-global-types/vue_3.5_0_0_0.d.ts" />
 import { onMounted, ref, watch } from 'vue';
 import { preferenceApi, uploadApi } from '@/api';
 import { useAuthStore } from '@/stores/auth';
