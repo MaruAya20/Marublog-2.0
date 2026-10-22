@@ -1,5 +1,6 @@
 # ==== 编译产物 ====
 backend/target/
+backend/bin/
 backend/*.class
 backend/*.jar
 backend/*.log
@@ -25,8 +26,25 @@ uploads/
 
 # ==== 旧项目副本（外面 D:\VSCodeFiles\MaruBlog 还有原始的）====
 MaruBlog/
-# ==== 敏感配置 ====
+
+# ==== 敏感配置（密钥/密码）====
 .env
 .env.local
-backend/src/main/resources/application-local.yml
+.env.*.local
+backend/src/main/resources/application.yml
+backend/src/main/resources/application-*.yml
+!backend/src/main/resources/application.example.yml
+!backend/src/main/resources/application-*.example.yml
 backend/uploads/
+
+# ==== 临时文件 ====
+*.tmp
+*.bak
+*.orig
+_test_*.mjs
+
+# ==== 证书/密钥 ====
+*.pem
+*.p12
+*.jks
+*.key

@@ -14,8 +14,8 @@ spring:
   mail:
     host: ${SMTP_HOST:smtp.qq.com}
     port: ${SMTP_PORT:465}
-    username: ${SMTP_USER:2947119343@qq.com}
-    password: ${SMTP_PASS:igvostrzzypddhdj}
+    username: ${SMTP_USER:your-smtp-user@example.com}
+    password: ${SMTP_PASS:your-smtp-password}
     properties:
       mail:
         smtp:
@@ -29,8 +29,8 @@ spring:
           timeout: 10000
   datasource:
     url: jdbc:mysql://localhost:3306/marublog?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci
-    username: root
-    password: z123qweasd
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:change-me}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
@@ -77,20 +77,20 @@ spring.autoconfigure.exclude: ${AI_EXCLUDE:}
 marublog:
   embedding:
     base-url: ${EMBEDDING_BASE_URL:https://tokenhub.tencentmaas.com}
-    api-key: ${EMBEDDING_API_KEY:sk-J89ubbyNvZfM6sQ2FcfEpqIqpERv0IKW5m1E2AN0d57PFFZ6}
+    api-key: ${EMBEDDING_API_KEY:your-embedding-api-key}
     model: ${EMBEDDING_MODEL:kinfra-text-embedding-0.6b}
   jwt:
-    secret: ${JWT_SECRET:dev-secret-change-me-in-production-please-1234567890}
+    secret: ${JWT_SECRET:change-me-to-a-random-string}
     expiration-ms: 604800000
   smtp:
     host: ${SMTP_HOST:smtp.qq.com}
     port: ${SMTP_PORT:465}
-    user: ${SMTP_USER:2947119343@qq.com}
-    pass: ${SMTP_PASS:igvostrzzypddhdj}
-    from: ${SMTP_FROM:MaruBlog <2947119343@qq.com>}
+    user: ${SMTP_USER:your-smtp-user@example.com}
+    pass: ${SMTP_PASS:your-smtp-password}
+    from: ${SMTP_FROM:MaruBlog <your-smtp-user@example.com>}
   admin:
-    op-code: ${ADMIN_OP_CODE:z123qweasd}
-    email: ${ADMIN_EMAIL:2947119343@qq.com}
+    op-code: ${ADMIN_OP_CODE:change-me}
+    email: ${ADMIN_EMAIL:admin@example.com}
   upload:
     dir: ${UPLOAD_DIR:./uploads}
   ai:
