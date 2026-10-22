@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue'
-import { adminApi, aiApi, unwrap, extractError } from '@/api'
+import { adminApi, aiApi, uploadApi, unwrap, extractError } from '@/api'
 
 type TabKey = 'dashboard' | 'users' | 'bans' | 'logs' | 'ai'
 
@@ -152,6 +152,85 @@ const ragStatsData = ref<any>(null)
 const loadingRagStats = ref(false)
 const reindexing = ref(false)
 const reindexMsg = ref('')
+
+const uploadingAvatar = ref<{ field: string | null }>({ field: null })
+const avatarInputRef = ref<HTMLInputElement | null>(null)
+const chatAvatarInputRef = ref<HTMLInputElement | null>(null)
+const exprInputRefs = ref<Record<string, HTMLInputElement | null>>({})
+
+const exprList = [
+  { key: 'neutral', field: 'exprNeutral', label: '平静', emoji: '😐' },
+  { key: 'happy',   field: 'exprHappy',   label: '开心', emoji: '😄' },
+  { key: 'thinking',field: 'exprThinking',label: '思考', emoji: '🤔' },
+  { key: 'shy',     field: 'exprShy',     label: '害羞', emoji: '😳' },
+  { key: 'excited', field: 'exprExcited', label: '激动', emoji: '🤩' },
+  { key: 'sad',     field: 'exprSad',     label: '难过', emoji: '😢' },
+  { key: 'angry',   field: 'exprAngry',   label: '生气', emoji: '😠' },
+  { key: 'sleepy',  field: 'exprSleepy',  label: '困了', emoji: '😴' },
+]
+
+function getInputRef(field: string): HTMLInputElement | null {
+  if (field === 'avatar') return avatarInputRef.value
+  if (field === 'chatAvatar') return chatAvatarInputRef.value
+  return exprInputRefs.value[field] || null
+}
+
+function ensureHiddenInputs() {
+  exprList.forEach(expr => {
+    if (!exprInputRefs.value[expr.field]) {
+      const inp = document.createElement('input')
+      inp.type = 'file'
+      inp.accept = 'image/*'
+      inp.style.display = 'none'
+      inp.addEventListener('change', (e: Event) => onAvatarUpload(e, expr.field))
+      document.body.appendChild(inp)
+      exprInputRefs.value[expr.field] = inp
+    }
+  })
+}
+
+function triggerAvatarUpload(field: string) {
+  if (field !== 'avatar' && field !== 'chatAvatar') ensureHiddenInputs()
+  getInputRef(field)?.click()
+}
+
+async function onAvatarUpload(e: Event, field: string) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  if (!file.type.startsWith('image/')) {
+    personaError.value = '请选择图片文件'
+    return
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    personaError.value = '图片超过 10MB'
+    return
+  }
+  uploadingAvatar.value = { field }
+  personaError.value = ''
+  try {
+    const res = await uploadApi.upload(file)
+    if (selectedPersona.value) {
+      (selectedPersona.value as any)[field] = res.url
+    }
+  } catch (err: any) {
+    personaError.value = err?.response?.data?.error || '上传失败'
+  } finally {
+    uploadingAvatar.value = { field: null }
+    input.value = ''
+  }
+}
+
+function clearAvatar(field: string) {
+  if (selectedPersona.value) {
+    (selectedPersona.value as any)[field] = ''
+  }
+}
+
+function isImageAvatar(val: string | undefined | null): boolean {
+  if (!val) return false
+  return val.startsWith('/api/uploads/') || val.startsWith('http://') || val.startsWith('https://') || val.startsWith('data:')
+}
 
 const chatHistory = ref<{ role: string; content: string; time?: string }[]>([])
 const chatInput = ref('')
@@ -501,8 +580,101 @@ onMounted(() => {
               <input v-model="selectedPersona.name" class="form-input" placeholder="例如：Maru" />
             </div>
             <div class="form-row">
-              <label>头像 URL</label>
-              <input v-model="selectedPersona.avatar" class="form-input" placeholder="https://..." />
+              <label>① FAB 主立绘（桌面小精灵大图）</label>
+              <div class="avatar-upload-wrap">
+                <input type="file" accept="image/*" ref="avatarInputRef" @change="(e) => onAvatarUpload(e, 'avatar')" style="display: none" />
+                <div
+                  class="avatar-upload-btn char-main"
+                  @click="triggerAvatarUpload('avatar')"
+                  :class="{ uploading: uploadingAvatar.field === 'avatar', hasImg: isImageAvatar(selectedPersona?.avatar) }"
+                >
+                  <template v-if="uploadingAvatar.field === 'avatar'">
+                    <div class="avatar-loading">⏳ 上传中...</div>
+                  </template>
+                  <template v-else-if="isImageAvatar(selectedPersona?.avatar)">
+                    <img :src="selectedPersona.avatar" alt="立绘" class="avatar-preview-img" />
+                    <div class="avatar-overlay"><span>📷 点击更换</span></div>
+                  </template>
+                  <template v-else>
+                    <div class="avatar-placeholder">
+                      <div class="avatar-emoji-lg">{{ selectedPersona?.avatar || '🌸' }}</div>
+                      <div class="avatar-hint">
+                        <div class="avatar-hint-title">透明底立绘 PNG 推荐</div>
+                        <div class="avatar-hint-sub">512×512 或更大，自动压缩至 1600px</div>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+                <div class="avatar-actions" v-if="isImageAvatar(selectedPersona?.avatar)">
+                  <button type="button" class="btn-ghost-sm" @click.stop="triggerAvatarUpload('avatar')">更换</button>
+                  <button type="button" class="btn-danger-sm" @click.stop="clearAvatar('avatar')">移除</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <label>② 聊天小头像（面板 Header + 消息气泡）</label>
+              <div class="chat-avatar-row">
+                <div
+                  class="chat-avatar-circle"
+                  @click="triggerAvatarUpload('chatAvatar')"
+                  :class="{ uploading: uploadingAvatar.field === 'chatAvatar', hasImg: isImageAvatar(selectedPersona?.chatAvatar) }"
+                >
+                  <template v-if="uploadingAvatar.field === 'chatAvatar'">⏳</template>
+                  <template v-else-if="isImageAvatar(selectedPersona?.chatAvatar)">
+                    <img :src="selectedPersona.chatAvatar" alt="头像" />
+                  </template>
+                  <template v-else-if="isImageAvatar(selectedPersona?.avatar)">
+                    <img :src="selectedPersona.avatar" alt="fallback" class="fallback-hint" />
+                    <div class="ca-overlay">点击上传专属小头像</div>
+                  </template>
+                  <template v-else>📷</template>
+                </div>
+                <div class="chat-avatar-info">
+                  <div class="ca-title">圆形裁剪，建议 256×256</div>
+                  <div class="ca-sub">不上传则自动使用主立绘裁剪</div>
+                  <div class="ca-actions" v-if="isImageAvatar(selectedPersona?.chatAvatar)">
+                    <button type="button" class="btn-ghost-sm" @click.stop="triggerAvatarUpload('chatAvatar')">更换</button>
+                    <button type="button" class="btn-danger-sm" @click.stop="clearAvatar('chatAvatar')">移除</button>
+                  </div>
+                </div>
+                <input type="file" accept="image/*" ref="chatAvatarInputRef" @change="(e) => onAvatarUpload(e, 'chatAvatar')" style="display: none" />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <label>③ 情绪立绘（8 种表情姿势，后续 AI 根据回复情绪自动切换）</label>
+              <div class="expr-grid">
+                <div v-for="expr in exprList" :key="expr.key" class="expr-item">
+                  <div
+                    class="expr-upload"
+                    @click="triggerAvatarUpload(expr.field)"
+                    :class="{ uploading: uploadingAvatar.field === expr.field, hasImg: isImageAvatar(selectedPersona?.[expr.field]) }"
+                  >
+                    <template v-if="uploadingAvatar.field === expr.field">⏳</template>
+                    <template v-else-if="isImageAvatar(selectedPersona?.[expr.field])">
+                      <img :src="selectedPersona[expr.field]" :alt="expr.label" />
+                      <div class="expr-overlay">更换</div>
+                    </template>
+                    <template v-else>
+                      <div class="expr-plus">＋</div>
+                      <div class="expr-empty-label">未设置</div>
+                    </template>
+                  </div>
+                  <div class="expr-label">
+                    <span class="expr-emoji">{{ expr.emoji }}</span>
+                    <span>{{ expr.label }}</span>
+                  </div>
+                  <button
+                    v-if="isImageAvatar(selectedPersona?.[expr.field])"
+                    type="button"
+                    class="expr-clear"
+                    @click.stop="clearAvatar(expr.field)"
+                    title="移除"
+                  >✕</button>
+                </div>
+              </div>
+              <div class="expr-hint">💡 全部留空时，AI 将始终使用主立绘。上传的立绘保持相同姿势，只变表情效果最佳。</div>
             </div>
             <div class="form-row">
               <label>灵魂提示词（System Prompt）</label>
@@ -871,4 +1043,270 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .chat-time { font-size: 10px; color: var(--text-muted, #aaa); margin-top: 2px; }
 .chat-input-row { display: flex; gap: 8px; align-items: flex-end; }
 .chat-input-row textarea { flex: 1; }
+
+/* Avatar upload */
+.avatar-upload-wrap { display: flex; flex-direction: column; gap: 8px; }
+.avatar-upload-btn {
+  width: 100%;
+  min-height: 180px;
+  border: 2px dashed var(--border, #e5e7eb);
+  border-radius: 12px;
+  cursor: pointer;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.2s, background 0.2s;
+  background: #fafafa;
+}
+.avatar-upload-btn:hover {
+  border-color: var(--accent, #4f46e5);
+  background: #f5f3ff;
+}
+.avatar-upload-btn.uploading {
+  pointer-events: none;
+  border-color: var(--accent, #4f46e5);
+}
+.avatar-upload-btn.hasImg {
+  border-style: solid;
+  border-color: var(--border, #e5e7eb);
+  background: #fff;
+}
+.avatar-upload-btn.hasImg:hover {
+  border-color: var(--accent, #4f46e5);
+}
+.avatar-preview-img {
+  width: 100%;
+  height: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  display: block;
+  background: linear-gradient(135deg, #f5f3ff 0%, #fafafa 100%);
+}
+.avatar-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.avatar-upload-btn.hasImg:hover .avatar-overlay { opacity: 1; }
+.avatar-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px;
+}
+.avatar-emoji {
+  font-size: 56px;
+  line-height: 1;
+}
+.avatar-hint { text-align: center; }
+.avatar-hint-title {
+  font-size: 14px;
+  color: var(--text-color, #333);
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+.avatar-hint-sub {
+  font-size: 12px;
+  color: var(--text-muted, #888);
+}
+.avatar-loading {
+  font-size: 14px;
+  color: var(--accent, #4f46e5);
+  font-weight: 500;
+}
+.avatar-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.avatar-emoji-lg {
+  font-size: 72px;
+  line-height: 1;
+}
+
+/* Chat avatar circle upload */
+.chat-avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px;
+  background: #fafbff;
+  border-radius: 12px;
+  border: 1px solid #eee;
+}
+.chat-avatar-circle {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 2px dashed #d1d5db;
+  cursor: pointer;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  position: relative;
+  flex-shrink: 0;
+  font-size: 28px;
+  color: #aaa;
+  transition: border-color 0.2s;
+}
+.chat-avatar-circle:hover {
+  border-color: #6c5ce7;
+  color: #6c5ce7;
+}
+.chat-avatar-circle.hasImg {
+  border-style: solid;
+  border-color: #e5e7eb;
+  background: #fff;
+}
+.chat-avatar-circle.hasImg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+.chat-avatar-circle.uploading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,0.8);
+  border-radius: 50%;
+}
+.ca-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  color: #fff;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 4px;
+  border-radius: 50%;
+}
+.fallback-hint { opacity: 0.7; }
+.chat-avatar-info { flex: 1; min-width: 0; }
+.ca-title { font-size: 13px; font-weight: 500; color: #333; }
+.ca-sub { font-size: 11px; color: #888; margin-top: 2px; }
+.ca-actions { margin-top: 6px; display: flex; gap: 6px; }
+
+/* Expression grid */
+.expr-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 8px;
+}
+.expr-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.expr-upload {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border: 2px dashed #d1d5db;
+  border-radius: 10px;
+  cursor: pointer;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #fafbff;
+  color: #aaa;
+  font-size: 24px;
+  transition: border-color 0.2s, background 0.2s;
+  position: relative;
+}
+.expr-upload:hover {
+  border-color: #6c5ce7;
+  background: #f5f3ff;
+  color: #6c5ce7;
+}
+.expr-upload.hasImg {
+  border-style: solid;
+  border-color: #e5e7eb;
+  background: #fff;
+}
+.expr-upload.hasImg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+}
+.expr-upload.uploading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,0.85);
+  border-radius: 8px;
+}
+.expr-plus { font-size: 28px; line-height: 1; }
+.expr-empty-label { font-size: 10px; margin-top: 4px; }
+.expr-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  font-size: 11px;
+  text-align: center;
+  padding: 3px 0;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.expr-upload.hasImg:hover .expr-overlay { opacity: 1; }
+.expr-label {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #555;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.expr-emoji { font-size: 12px; }
+.expr-clear {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.expr-item:hover .expr-clear { opacity: 1; }
+.expr-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #888;
+  background: #fffbeb;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border-left: 3px solid #fbbf24;
+}
 </style>

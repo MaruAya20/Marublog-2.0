@@ -1,19 +1,39 @@
 <template>
   <div class="ai-chat-widget">
-    <button v-if="!open" class="ai-fab" @click="open = true" title="AI 助手 Maru">
-      <span class="fab-icon">🤖</span>
+    <button
+      class="ai-fab"
+      :class="{ 'ai-fab-char': persona && isImageAvatar(persona.avatar) }"
+      @click="open = !open"
+      :title="'AI 助手 ' + (persona?.name || 'Maru')"
+    >
+      <img
+        v-if="persona && isImageAvatar(persona.avatar)"
+        :src="open ? getExprAvatar() : persona.avatar"
+        class="fab-char-img"
+        :key="exprFlipKey"
+      />
+      <span v-else class="fab-icon">{{ persona?.avatar || '🤖' }}</span>
       <span v-if="unread > 0" class="fab-badge">{{ unread > 9 ? '9+' : unread }}</span>
+      <span class="fab-hint" v-if="persona && isImageAvatar(persona.avatar) && !open">{{ persona?.name || 'Maru' }}</span>
     </button>
 
     <div v-if="open" class="ai-panel">
       <div class="ai-header">
         <div class="ai-header-left">
-          <span class="ai-avatar">🤖</span>
+          <div class="ai-avatar">
+            <img v-if="persona && isImageAvatar(persona.chatAvatar)" :src="persona.chatAvatar" class="ai-avatar-img" />
+            <img v-else-if="persona && isImageAvatar(persona.avatar)" :src="persona.avatar" class="ai-avatar-img" />
+            <span v-else>{{ persona?.avatar || '🤖' }}</span>
+          </div>
           <div class="ai-title-group">
-            <div class="ai-title">Maru <span class="ai-title-tag">AI 助手</span></div>
-            <div class="ai-subtitle">你好，我是 Maru ~</div>
+            <div class="ai-title">{{ persona?.name || 'Maru' }} <span class="ai-title-tag">AI 助手</span></div>
+            <div class="ai-subtitle">你好，我是 {{ persona?.name || 'Maru' }} ~</div>
           </div>
         </div>
+        <button class="header-tts-toggle" :class="{ on: autoTTS }" @click="toggleAutoTTS" :title="autoTTS ? '自动朗读：开' : '自动朗读：关'">
+          <span class="tts-icon">🔊</span>
+          <span class="tts-label">{{ autoTTS ? 'ON' : 'OFF' }}</span>
+        </button>
         <button class="ai-close" @click="open = false">✕</button>
       </div>
 
@@ -46,13 +66,37 @@
             </div>
             <div v-for="m in messages" :key="m.id" class="msg-row" :class="m.role === 'USER' ? 'user' : 'ai'">
               <div class="msg-bubble" :class="m.role === 'USER' ? 'user' : 'ai'">
-                <span v-if="m.role === 'ASSISTANT'" class="msg-avatar">🤖</span>
-                <div class="msg-content" v-html="formatMsg(m.content)"></div>
+                <div v-if="m.role === 'ASSISTANT'" class="msg-avatar">
+                  <img v-if="persona && isImageAvatar(persona.chatAvatar)" :src="persona.chatAvatar" class="msg-avatar-img" />
+                  <img v-else-if="persona && isImageAvatar(persona.avatar)" :src="persona.avatar" class="msg-avatar-img" />
+                  <span v-else>{{ persona?.avatar || '🤖' }}</span>
+                </div>
+                <div class="msg-body">
+                  <div class="msg-content" v-html="formatMsg(m.content)"></div>
+                  <div v-if="m.role === 'ASSISTANT' && m.ja" class="msg-actions">
+                    <button
+                      class="msg-action-btn"
+                      :class="{ playing: ttsPlayingId === m.id, loading: ttsLoading && ttsPlayingId === m.id }"
+                      :disabled="ttsLoading"
+                      @click="ttsPlayingId === m.id ? stopTTS() : speakJa(m.ja, m.id)"
+                      :title="ttsPlayingId === m.id ? '停止朗读' : '朗读日文'"
+                    >
+                      <span v-if="ttsPlayingId === m.id">⏹</span>
+                      <span v-else-if="ttsLoading && !ttsReady">⏳</span>
+                      <span v-else>🔊</span>
+                    </button>
+                    <span class="msg-ja-preview" @click="speakJa(m.ja, m.id)" :title="m.ja">{{ m.ja }}</span>
+                  </div>
+                </div>
               </div>
             </div>
             <div v-if="loading" class="msg-row ai">
               <div class="msg-bubble ai">
-                <span class="msg-avatar">🤖</span>
+                <div class="msg-avatar">
+                  <img v-if="persona && isImageAvatar(persona.chatAvatar)" :src="persona.chatAvatar" class="msg-avatar-img" />
+                  <img v-else-if="persona && isImageAvatar(persona.avatar)" :src="persona.avatar" class="msg-avatar-img" />
+                  <span v-else>{{ persona?.avatar || '🤖' }}</span>
+                </div>
                 <div class="typing">
                   <span></span><span></span><span></span>
                 </div>
@@ -82,7 +126,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, computed } from 'vue'
+import { ref, onMounted, nextTick, computed, watch } from 'vue'
 import { api, unwrap } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
@@ -99,6 +143,135 @@ const loading = ref(false)
 const messagesWrap = ref<HTMLDivElement>()
 const inputRef = ref<HTMLTextAreaElement>()
 const unread = ref(0)
+const persona = ref<any>(null)
+const currentEmotion = ref<string>('neutral')
+const exprFlipKey = ref(0)
+
+function setEmotion(e: string) {
+  if (!e) return
+  if (e === 'neutral' && currentEmotion.value !== 'neutral') return
+  if (e === currentEmotion.value) return
+  currentEmotion.value = e
+  exprFlipKey.value++
+}
+
+function getExprAvatar(): string {
+  if (!persona.value) return ''
+  const m: Record<string, string | undefined> = {
+    neutral: persona.value.exprNeutral,
+    happy: persona.value.exprHappy,
+    thinking: persona.value.exprThinking,
+    shy: persona.value.exprShy,
+    excited: persona.value.exprExcited,
+    sad: persona.value.exprSad,
+    angry: persona.value.exprAngry,
+    sleepy: persona.value.exprSleepy,
+  }
+  return m[currentEmotion.value] || persona.value.avatar || ''
+}
+
+watch(open, (isOpen, wasOpen) => {
+  if (!isOpen && wasOpen) {
+    currentEmotion.value = 'neutral'
+  }
+})
+
+const ttsPlayingId = ref<number | null>(null)
+const ttsReady = ref(false)
+const ttsLoading = ref(false)
+const autoTTS = ref(localStorage.getItem('maru_autotts') === '1')
+let aqInstance: any = null
+let k2kInstance: any = null
+let currentAudio: HTMLAudioElement | null = null
+
+async function initAquesTalk() {
+  if (ttsReady.value || ttsLoading.value) return
+  ttsLoading.value = true
+  try {
+    const { load: loadAq } = await import('aquestalk.js')
+    const { load: loadK2K } = await import('kanji2koe-openjtalk')
+    const origin = window.location.origin
+    k2kInstance = await loadK2K({ wasmPath: `${origin}/kanji2koe/aqkanji2koe_wasm_bg.wasm` })
+    aqInstance = await loadAq('f1', { baseUrl: `${origin}/aquestalk/`, wasmPath: `${origin}/aquestalk/v86.wasm` })
+    ttsReady.value = true
+    console.log('[AquesTalk] ready (voice=f1)')
+  } catch (e) {
+    console.warn('[AquesTalk] init failed:', e)
+  } finally {
+    ttsLoading.value = false
+  }
+}
+onMounted(() => initAquesTalk())
+
+function toggleAutoTTS() {
+  autoTTS.value = !autoTTS.value
+  localStorage.setItem('maru_autotts', autoTTS.value ? '1' : '0')
+  if (autoTTS.value && !ttsReady.value && !ttsLoading.value) initAquesTalk()
+}
+
+async function speakJa(jaText: string, msgId: number) {
+  if (!jaText) return
+  if (!ttsReady.value) {
+    if (!ttsLoading.value) initAquesTalk()
+    return
+  }
+  stopTTS()
+  try {
+    let cleaned = jaText
+      .replace(/<[^>]+>/g, '')
+      .replace(/[\r\n\t]/g, ' ')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .replace(/[\u{1F300}-\u{1FAFF}]/gu, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (!cleaned) return
+    let koe = k2kInstance.convert(cleaned)
+    koe = koe.replace(/っ(?=[。？！、\s]|$)/g, 'っと')
+    koe = koe.replace(/っとと/g, 'っと')
+    console.log('[AquesTalk] speakJa input:', cleaned, '→ koe:', JSON.stringify(koe), 'len:', koe.length)
+    const wav = aqInstance.run(koe, 100)
+    const bytes = new Uint8Array(wav.byteLength)
+    bytes.set(wav)
+    const blob = new Blob([bytes], { type: 'audio/wav' })
+    const url = URL.createObjectURL(blob)
+    const audio = new Audio(url)
+    currentAudio = audio
+    audio.onplay = () => { ttsPlayingId.value = msgId }
+    audio.onended = () => { URL.revokeObjectURL(url); ttsPlayingId.value = null }
+    audio.onerror = () => { URL.revokeObjectURL(url); ttsPlayingId.value = null }
+    await audio.play()
+  } catch (e) {
+    console.error('[AquesTalk] speak error:', e)
+    ttsPlayingId.value = null
+  }
+}
+
+function stopTTS() {
+  if (currentAudio) {
+    currentAudio.pause()
+    currentAudio.src = ''
+    currentAudio = null
+  }
+  ttsPlayingId.value = null
+}
+
+function isImageAvatar(val: string | undefined | null): boolean {
+  if (!val) return false
+  return val.startsWith('/api/uploads/') || val.startsWith('http://') || val.startsWith('https://') || val.startsWith('data:')
+}
+
+function avatarDisplay(val: string | undefined | null): string {
+  if (!val) return '🤖'
+  if (isImageAvatar(val)) return ''
+  return val
+}
+
+async function loadPersona() {
+  try {
+    const res = await api.get('/ai/persona')
+    persona.value = unwrap(res)
+  } catch {}
+}
 
 const quickPrompts = ['介绍一下 MaruBlog', '怎么写文章？', '如何评论？']
 
@@ -184,7 +357,12 @@ async function sendMessage(text?: string) {
     if (d && d.sessionId && !currentSessionId.value) {
       currentSessionId.value = d.sessionId
     }
-    messages.value.push({ role: 'ASSISTANT', content: d?.reply || '(无回复)', id: Date.now() + 1 })
+    if (d?.emotion) setEmotion(d.emotion)
+    const newMsgId = Date.now() + 1
+    messages.value.push({ role: 'ASSISTANT', content: d?.reply || '(无回复)', ja: d?.ja || '', id: newMsgId })
+    if (autoTTS.value && d?.ja) {
+      setTimeout(() => speakJa(d.ja, newMsgId), 400)
+    }
     if (auth.isLoggedIn && Array.isArray(sessions.value)) {
       const s = sessions.value.find((x: any) => x.id === currentSessionId.value)
       if (s && (!s.title || s.title === '新对话')) {
@@ -228,6 +406,7 @@ function goLogin() {
 }
 
 onMounted(() => {
+  loadPersona()
   loadSessions()
 })
 </script>
@@ -241,23 +420,95 @@ onMounted(() => {
 }
 
 .ai-fab {
+  cursor: pointer;
+  position: relative;
+  border: none;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.2s;
+}
+
+.ai-fab:not(.ai-fab-char) {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #6c5ce7, #a29bfe);
-  border: none;
-  cursor: pointer;
-  box-shadow: 0 6px 20px rgba(108, 92, 231, 0.4);
+  background: linear-gradient(135deg, #cd2941, #d36273);
+  box-shadow: 0 6px 20px #cd2941;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 26px;
-  transition: transform 0.2s, box-shadow 0.2s;
-  position: relative;
 }
-.ai-fab:hover {
+.ai-fab:not(.ai-fab-char):hover {
   transform: scale(1.08);
-  box-shadow: 0 8px 28px rgba(108, 92, 231, 0.55);
+  box-shadow: 0 8px 28px #cd2941;
+}
+
+.ai-fab-char {
+  background: transparent;
+  padding: 0;
+  line-height: 0;
+  animation: fabFloat 3.5s ease-in-out infinite;
+}
+.ai-fab-char:hover {
+  transform: scale(1.05) translateY(-4px);
+  filter: drop-shadow(0 10px 24px #deabab);
+  animation-play-state: paused;
+}
+.ai-fab-char:active {
+  transform: scale(0.97);
+}
+@keyframes fabFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.fab-char-img {
+  width: 300px;
+  height: auto;
+  max-height: 250px;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 16px #e1b5bc);
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+  animation: flipSwitch 0.5s ease;
+}
+@keyframes flipSwitch {
+  0%   { transform: perspective(500px) rotateY(0deg) scale(1); }
+  50%  { transform: perspective(500px) rotateY(90deg) scale(0.92); }
+  100% { transform: perspective(500px) rotateY(0deg) scale(1); }
+}
+.fab-icon {
+  font-size: 26px;
+}
+.fab-hint {
+  position: absolute;
+  bottom: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 13px;
+  color: #fff;
+  background: linear-gradient(135deg, #cd2941, #d36273);
+  padding: 7px 12px;
+  border-radius: 14px;
+  white-space: nowrap;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+  box-shadow: 0 4px 12px #d36273;
+}
+.fab-hint::before {
+  content: '';
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-bottom-color: #cd2941;
+}
+.ai-fab-char:hover .fab-hint {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-2px);
 }
 .fab-badge {
   position: absolute;
@@ -277,24 +528,26 @@ onMounted(() => {
 }
 
 .ai-panel {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 16px;
   width: 440px;
   height: 640px;
-  max-height: calc(100dvh - 48px);
+  max-height: calc(100dvh - 280px);
   background: #fff;
   border-radius: 16px;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: slideUp 0.25s ease;
+  animation: slideDown 0.25s ease;
+  transform-origin: bottom right;
 }
 
-@keyframes slideUp {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+@keyframes slideDown {
+  from { transform: translateY(-20px) scale(0.96); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
 }
 
 .ai-header {
@@ -302,7 +555,7 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 14px 18px;
-  background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+  background: linear-gradient(135deg,  #cd2941, #d36273);
   color: #fff;
 }
 .ai-header-left { display: flex; align-items: center; gap: 12px; }
@@ -315,12 +568,28 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 .msg-avatar {
   width: 28px;
   height: 28px;
   font-size: 16px;
   background: transparent;
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 1px;
+}
+.ai-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+.msg-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 .ai-title { font-size: 16px; font-weight: 600; }
 .ai-title-tag {
@@ -332,6 +601,35 @@ onMounted(() => {
   font-weight: normal;
 }
 .ai-subtitle { font-size: 12px; opacity: 0.85; }
+
+.header-tts-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 14px;
+  border: 1.5px solid rgba(255,255,255,0.4);
+  background: rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.7);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+.header-tts-toggle:hover {
+  background: rgba(255,255,255,0.25);
+  color: #fff;
+}
+.header-tts-toggle .tts-icon { font-size: 13px; }
+.header-tts-toggle .tts-label { letter-spacing: 0.5px; }
+.header-tts-toggle.on {
+  background: linear-gradient(135deg, rgba(255,255,255,0.4), rgba(255,255,255,0.25));
+  border-color: #fff;
+  color: #fff;
+  box-shadow: 0 0 10px rgba(255,255,255,0.3);
+}
+
 .ai-close {
   background: transparent;
   border: none;
@@ -359,7 +657,7 @@ onMounted(() => {
 .sidebar-new {
   margin: 10px;
   padding: 8px;
-  background: #6c5ce7;
+  background: #cd2941;
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -367,7 +665,7 @@ onMounted(() => {
   font-size: 13px;
   transition: background 0.15s;
 }
-.sidebar-new:hover { background: #5a4bd1; }
+.sidebar-new:hover { background: #d36273; }
 .session-list {
   flex: 1;
   overflow-y: auto;
@@ -386,7 +684,7 @@ onMounted(() => {
   transition: background 0.1s;
 }
 .session-item:hover { background: #eef0ff; }
-.session-item.active { background: #6c5ce7; color: #fff; }
+.session-item.active { background: #cd2941; color: #fff; }
 .session-title {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -446,11 +744,11 @@ onMounted(() => {
   border-radius: 16px;
   cursor: pointer;
   font-size: 12px;
-  color: #6c5ce7;
+  color: #cd2941;
   transition: all 0.15s;
 }
 .quick-prompts button:hover {
-  border-color: #6c5ce7;
+  border-color: #cd2941;
   background: #f0eeff;
 }
 
@@ -470,7 +768,7 @@ onMounted(() => {
   gap: 8px;
 }
 .msg-bubble.user {
-  background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+  background: linear-gradient(135deg, #cd2941, #d36273);
   color: #fff;
   border-bottom-right-radius: 4px;
 }
@@ -490,6 +788,58 @@ onMounted(() => {
 .msg-bubble.user code {
   background: rgba(255,255,255,0.25);
 }
+
+.msg-body { flex: 1; min-width: 0; }
+
+.msg-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed #eee;
+}
+
+.msg-action-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #cd2941, #d36273);
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.msg-action-btn:hover:not(:disabled) {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(205, 41, 65, 0.35);
+}
+.msg-action-btn:disabled { opacity: 0.5; cursor: wait; }
+.msg-action-btn.playing {
+  background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+  animation: pulseRing 1.2s infinite;
+}
+@keyframes pulseRing {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(108, 92, 231, 0.5); }
+  50%      { box-shadow: 0 0 0 6px rgba(108, 92, 231, 0); }
+}
+
+.msg-ja-preview {
+  font-size: 11px;
+  color: #999;
+  cursor: pointer;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+.msg-ja-preview:hover { color: #cd2941; }
 
 .typing {
   display: flex;
@@ -531,13 +881,13 @@ onMounted(() => {
   font-family: inherit;
   transition: border-color 0.15s;
 }
-.input-area textarea:focus { border-color: #6c5ce7; }
+.input-area textarea:focus { border-color: #cd2941; }
 .input-area textarea:disabled { background: #f5f5f5; color: #aaa; }
 .send-btn {
   width: 38px;
   height: 38px;
   border-radius: 10px;
-  background: #6c5ce7;
+  background: #cd2941;
   color: #fff;
   border: none;
   cursor: pointer;
@@ -545,13 +895,13 @@ onMounted(() => {
   transition: background 0.15s;
   flex-shrink: 0;
 }
-.send-btn:hover:not(:disabled) { background: #5a4bd1; }
+.send-btn:hover:not(:disabled) { background: #d36273; }
 .send-btn:disabled { background: #ccc; cursor: not-allowed; }
 
 .login-hint {
   text-align: center;
   font-size: 12px;
-  color: #6c5ce7;
+  color: #cd2941;
   padding: 6px;
   cursor: pointer;
   background: #fff;
